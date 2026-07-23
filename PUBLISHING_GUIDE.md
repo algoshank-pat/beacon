@@ -84,7 +84,7 @@ A history scrub only protects future clones — anyone who already has the old c
    - **Description**: `A personal job-search pipeline that screens out visa-sponsorship dead ends automatically and surfaces matches in Google Sheets, for pennies.`
    - **Visibility**: Public
    - **Do NOT** initialize with a README/.gitignore/license — this repo already has all three
-3. Click **Create repository** and copy the URL (e.g. `https://github.com/algoshank/beacon.git`)
+3. Click **Create repository** and copy the URL (e.g. `https://github.com/algoshank-pat/beacon.git`)
 
 ---
 
@@ -109,7 +109,7 @@ remainder only), opt-in Claude Sonnet fit-scoring, free-only company
 enrichment, and Google Sheets as the entire tracking/approval/
 notification UI."
 
-git remote add origin https://github.com/algoshank/beacon.git
+git remote add origin https://github.com/algoshank-pat/beacon.git
 git push -u origin main
 ```
 

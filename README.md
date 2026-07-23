@@ -1,4 +1,4 @@
-# 🔭 Beacon — Job Search Automation for H-1B & Visa Holders
+# 🔭 Beacon — Job Search Automation for Work Visa Holders
 
 > **This is not a job site, a hosted service, or an app you sign up for.** It's a free, open-source Python program you install and run yourself, entirely on your own computer. It discovers postings across the web, automatically screens out visa-sponsorship dead ends, scores fit against your resume, and surfaces everything in a Google Sheet you already know how to use — for pennies, because AI is only called when it's actually needed. Since it only ever runs on your own machine, nothing about your job search is ever captured, stored, or seen by anyone but you.
 

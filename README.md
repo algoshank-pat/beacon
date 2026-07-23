@@ -46,7 +46,7 @@ Fair question — here's the honest comparison, not a sales pitch. LinkedIn Prem
 | | **LinkedIn Premium Career** | **Beacon** |
 |---|---|---|
 | Detects visa-sponsorship restrictions before you apply | ❌ Not a feature at all — you still read every posting yourself | ✅ Every posting auto-classified `Sponsored`/`No sponsor`/`No mention`/`Unclear`, 577 restricted postings caught automatically in this project's own history |
-| Cost | ~$29.99–$39.99/month, forever, whether you're actively searching or not | **$8.88 total, lifetime**, across 137,000+ postings processed (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed)) |
+| Cost | ~$29.99–$39.99/month, forever, whether you're actively searching or not | **Free software.** Only real cost is your own AI usage, paid directly to Anthropic — **$8.88 total** is this project's own real lifetime usage across 137,000+ postings (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed)) |
 | Job sources | LinkedIn's own listings + LinkedIn's feed-ranking algorithm decides what you see | Adzuna broad search + direct polling of 4 ATS platforms (Greenhouse/Lever/Ashby/SmartRecruiters) — you see everything currently open at a company you track, not what an engagement algorithm surfaces |
 | Filter logic | A black-box "job match" score you can't inspect or edit | Every keyword, threshold, and exclusion rule lives in a plain SQLite table you can read and edit directly — no guessing why something did or didn't match |
 | Ongoing effort | You still manually search, scroll, and re-check the same companies | Runs unattended 3x/day; results land in a Sheet you already know how to use, with dead postings auto-removed |
@@ -146,6 +146,8 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 ---
 
 ## 💰 Cost Model — AI Only When It's Actually Needed
+
+> **This software itself is free and open source (MIT license) — there's no fee, subscription, or payment to download or run it.** The $8.88 below is *not* a price. It's the real, total AI usage cost from one person's own account, accumulated over several weeks of actual daily use, paid directly to Anthropic (not to this project) at their standard pay-as-you-go API rates. You bring your own API key and only ever pay the provider for what you personally use — for most people running this at a similar scale, that's cents to a few dollars over a real job search, not a fixed cost anyone charges you.
 
 Real numbers from this project's own live history, not an estimate:
 
@@ -282,7 +284,7 @@ No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beac
 Everything runs locally on your own machine against your own SQLite database and your own Google Sheets — nothing is sent anywhere except the API calls you configure (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub). Nobody else sees your search activity or your decisions.
 
 **How much does it actually cost to run?**
-See [Cost Model](#-cost-model--ai-only-when-its-actually-needed) — this project's own real lifetime spend, across 137,000+ jobs processed, is $8.88.
+The software itself is free — there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Cost Model](#-cost-model--ai-only-when-its-actually-needed): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88 — that's what actual usage costs at this scale, not a fee anyone charges you.
 
 **Do I need to know Python to use this?**
 You need to be comfortable running a few CLI commands and editing a `.env` file (see [Setup](#️-setup)). Day-to-day use afterward is entirely in Google Sheets.

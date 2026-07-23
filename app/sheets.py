@@ -48,7 +48,19 @@ from app.salary_extraction import extract_salary_range
 from app.sheets_retry import call_with_retry
 
 MAIN_SHEET_COLUMNS = [
-    "Job ID", "Company", "Title", "Industry", "Location",
+    "Job ID", "Company",
+    # Columns C & D per direct request -- moved here from the end (where
+    # they were originally appended) via a live column insert, same pattern
+    # as the "Location State" move documented below. High-visibility
+    # placement right after Company, since this is a real historical
+    # sponsorship signal from app.lca_enrichment, distinct from Visa Flag
+    # (which only ever reads one posting's own text). "DOL LCA Match" shows
+    # the exact employer name matched in DOL's public LCA disclosure data
+    # (blank if never matched), so a wrong match is visible and auditable
+    # rather than a silent black box. "Last Sponsored" is that employer's
+    # most recent Certified/Certified-Withdrawn LCA date.
+    "DOL LCA Match", "Last Sponsored",
+    "Title", "Industry", "Location",
     # Right after "Location" per direct request. Originally appended at the
     # end to avoid a reorder (see git history/RUNBOOK for that reasoning);
     # moved here via a live column insert (app.sheets shifts every
@@ -66,13 +78,6 @@ MAIN_SHEET_COLUMNS = [
     # column writes are positional, and appending needs no live data move.
     # Computed by app.cloud_platforms at ingest time from title+description.
     "Cloud Platforms",
-    # Real historical sponsorship signal from app.lca_enrichment -- distinct
-    # from Visa Flag, which only ever reads this one posting's own text.
-    # "DOL LCA Match" shows the exact employer name matched in DOL's public
-    # LCA disclosure data (blank if never matched), so a wrong match is
-    # visible and auditable rather than a silent black box. "Last Sponsored"
-    # is that employer's most recent Certified/Certified-Withdrawn LCA date.
-    "DOL LCA Match", "Last Sponsored",
 ]
 
 JOB_ID_COL_INDEX = MAIN_SHEET_COLUMNS.index("Job ID") + 1

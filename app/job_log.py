@@ -23,7 +23,11 @@ from app.sheets import _format_lca_date, display_visa_flag, format_salary_range
 from app.sheets_retry import call_with_retry
 
 JOB_LOG_COLUMNS = [
-    "Job ID", "Company", "Title", "Industry", "Location",
+    "Job ID", "Company",
+    # Columns C & D, same live-column-move as MAIN_SHEET_COLUMNS in
+    # app.sheets -- see that constant's comment.
+    "DOL LCA Match", "Last Sponsored",
+    "Title", "Industry", "Location",
     # Right after "Location", same live-column-move as MAIN_SHEET_COLUMNS
     # in app.sheets -- see that constant's comment.
     "Location State",
@@ -34,9 +38,6 @@ JOB_LOG_COLUMNS = [
     "Decision", "Last Updated",
     # Appended at the end, same rationale as MAIN_SHEET_COLUMNS in app.sheets.
     "Cloud Platforms",
-    # Same as app.sheets.MAIN_SHEET_COLUMNS -- real historical sponsorship
-    # signal from app.lca_enrichment, distinct from Visa Flag.
-    "DOL LCA Match", "Last Sponsored",
 ]
 
 JOB_ID_COL_INDEX = JOB_LOG_COLUMNS.index("Job ID") + 1

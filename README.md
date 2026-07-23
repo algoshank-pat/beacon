@@ -1,0 +1,306 @@
+# 🔭 Beacon — Job Search Automation for H-1B & Visa Holders
+
+> A personal job-search pipeline built for H-1B/OPT/visa-holder job seekers: it discovers postings across the web, automatically screens out visa-sponsorship dead ends, scores fit against your resume, and surfaces everything in a Google Sheet you already know how to use — for pennies, because AI is only called when it's actually needed.
+
+![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)
+![Anthropic](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-D97757?logo=anthropic&logoColor=white)
+![APScheduler](https://img.shields.io/badge/APScheduler-3.11-informational)
+![gspread](https://img.shields.io/badge/Google%20Sheets-gspread-34A853?logo=googlesheets&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-WAL%20mode-003B57?logo=sqlite&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Tag](https://img.shields.io/badge/for-H1B%20%2F%20Visa%20Holders-blueviolet)
+
+[![GitHub stars](https://img.shields.io/github/stars/algoshank/beacon?style=social)](https://github.com/algoshank/beacon/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/algoshank/beacon?style=social)](https://github.com/algoshank/beacon/network/members)
+![Last commit](https://img.shields.io/github/last-commit/algoshank/beacon)
+![Issues](https://img.shields.io/github/issues/algoshank/beacon)
+
+**Tags**: `h1b` `visa-sponsorship` `job-search` `international-students` `opt` `stem-opt` `immigration` `career-tools` `claude-ai` `automation`
+
+**If this saves you time, a ⭐ helps other visa holders find it too.**
+
+### Who this is for
+
+- H-1B holders, F-1 OPT/STEM-OPT students, and anyone else whose job search has to filter for visa sponsorship
+- Anyone tired of discovering a sponsorship dead-end three paragraphs into a job description, after already spending time on it
+- Job seekers in any keyword-matchable field, not just tech — the role/tech keyword lists are fully yours to redefine
+- Builders curious what a real, production Claude Code build looks like end-to-end, bugs and all (see [`RUNBOOK.md`](./RUNBOOK.md))
+
+---
+
+## Why this exists
+
+If you're job-hunting on a visa (H-1B, OPT/STEM-OPT, or otherwise), you already know the real cost isn't finding job postings — it's the hours lost reading through postings that were never going to sponsor you in the first place, often three paragraphs deep in EEO boilerplate that never even mentions "visa" until the very last sentence.
+
+Beacon was built to remove that specific waste, for close to $0:
+
+- **Never manually re-check "do they sponsor?" again.** Every posting's own text is automatically screened for sponsorship language and labeled `Sponsored` / `No sponsor` / `No mention` / `Unclear` before you ever open it.
+- **You define what "relevant" means, not a hardcoded list.** The role/tech keyword lists that decide what gets surfaced at all are stored in a database table, not buried in code — retarget it for your own field in the Sheet or the DB, no redeploy needed.
+- **AI is the last resort, not the first.** See [Cost Model](#-cost-model--ai-only-when-its-actually-needed) below — the real numbers, not a guess.
+- **Runs unattended, three times a day**, and lands everything in a Google Sheet — no new app to learn, no dashboard to check obsessively.
+
+## 💸 Why not just pay for LinkedIn Premium?
+
+Fair question — here's the honest comparison, not a sales pitch. LinkedIn Premium Career is genuinely useful for some things (InMail credits, "who viewed your profile," LinkedIn Learning). It just doesn't solve the actual problem that costs visa holders the most time:
+
+| | **LinkedIn Premium Career** | **Beacon** |
+|---|---|---|
+| Detects visa-sponsorship restrictions before you apply | ❌ Not a feature at all — you still read every posting yourself | ✅ Every posting auto-classified `Sponsored`/`No sponsor`/`No mention`/`Unclear`, 577 restricted postings caught automatically in this project's own history |
+| Cost | ~$29.99–$39.99/month, forever, whether you're actively searching or not | **$8.88 total, lifetime**, across 137,000+ postings processed (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed)) |
+| Job sources | LinkedIn's own listings + LinkedIn's feed-ranking algorithm decides what you see | Adzuna broad search + direct polling of 4 ATS platforms (Greenhouse/Lever/Ashby/SmartRecruiters) — you see everything currently open at a company you track, not what an engagement algorithm surfaces |
+| Filter logic | A black-box "job match" score you can't inspect or edit | Every keyword, threshold, and exclusion rule lives in a plain SQLite table you can read and edit directly — no guessing why something did or didn't match |
+| Ongoing effort | You still manually search, scroll, and re-check the same companies | Runs unattended 3x/day; results land in a Sheet you already know how to use, with dead postings auto-removed |
+| "Applicant insights" / InMail | Tells you how you compare to other applicants, lets you message recruiters — doesn't tell you upfront whether they'll sponsor at all | N/A by design — the goal is never wasting an InMail or an application on a company that was never going to sponsor in the first place |
+
+**The honest summary**: Beacon doesn't replace everything LinkedIn Premium does (it won't teach you a course or show you profile-view analytics). It replaces the one feature visa holders actually need most — "will this company even consider me" — which LinkedIn has never built, at roughly 2% of a single month's subscription cost, running for as long as your job search takes.
+
+### How the keyword + AI pipeline actually works
+
+```
+Every posting →  keyword match (role/tech titles)  →  does it even mention "visa"/"sponsor"/"h1b"/etc?
+                          │                                          │
+                    no match → discarded,                    no  → "No mention", $0, done
+                    zero cost, zero AI                         │
+                                                                yes → regex-confident phrase?
+                                                                          │            │
+                                                                    yes, $0      no → Haiku classifies
+                                                                    done         (only the genuinely
+                                                                                  ambiguous remainder)
+```
+
+Three tiers, cheapest first — a real posting only ever reaches an LLM if a human would also have to actually read the sentence carefully to decide. Everything upstream of that (does this even look like a role I want, does it even mention sponsorship at all) is free, deterministic Python.
+
+---
+
+## 📸 Screenshots
+
+| Beacon Tracking Sheet | Job Log (Filtered/Excluded) |
+|---|---|
+| ![Beacon sheet with job postings, visa flags, and decision columns](./docs/screenshots/beacon_sheet.png) | ![Job Log sheet showing excluded postings with rejection reasons](./docs/screenshots/job_log_sheet.png) |
+
+| SQLite Schema & Sample Data | Source: a real Greenhouse job board |
+|---|---|
+| ![SQLite database schema and a sample query](./docs/screenshots/database.png) | ![A real company's public Greenhouse job board](./docs/screenshots/source_greenhouse.png) |
+
+*(Company names, decisions, and salary figures in the screenshots above are from a live personal account — see the note in `docs/screenshots/README.md` for what's shown vs. redacted.)*
+
+---
+
+## ✨ Key Features
+
+- **Five job sources**: broad keyword discovery via Adzuna, plus direct polling of Greenhouse, Lever, Ashby, and SmartRecruiters for companies you specifically track — no query-time filtering needed on the targeted side, every posting is pulled and filtered locally
+- **Self-onboarding companies**: type a company name into a `SEED` row on the Sheet and the pipeline guesses and verifies a real job-board slug across all four ATS platforms automatically — no manual API digging
+- **Three-tier visa classification**: regex → free keyword pre-check → Haiku, cheapest first (see Cost Model)
+- **Live-editable filter criteria**: role/tech keyword include-lists, title excludes, seniority, location, posted-date window, company priority tier — all in a SQLite table, editable without touching code
+- **Fit scoring on demand, not by default**: Claude scores a job against your resume only when *you* flag it `Go Score` on the Sheet — never runs against the whole backlog automatically
+- **Free company enrichment**: employee count, funding stage, HQ, revenue — from two free-tier APIs only, with zero LLM fallback (a field just stays blank rather than ever costing money to fill in)
+- **US location resolution** from messy free-text (`"US-CA-Menlo Park"`, bare city names, county-only strings) against public Census reference data — no geocoding API
+- **AWS/GCP/Azure detection** from posting text, with a refresh pass for postings whose source truncates the description
+- **Dead-link detection**: postings that get pulled after you've already seen them get automatically evicted from the Sheet, not left as a broken link
+- **Google Sheets as the entire UI**: notification, approval, and status tracking are all native Sheets features — no dashboard, no login, no separate app to check
+- **Runs unattended** via a single locked, crash-recovering scheduler process — main pipeline 3x/day, fit-scoring and company enrichment on their own offset schedules, an approval poller every 30 minutes
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    SCHED["Scheduler (single locked process, 3x/day + startup catch-up)"] --> SEED["Seed-via-Sheet: onboard new companies"]
+    SEED --> ING[Ingestion: Adzuna + Greenhouse/Lever/Ashby/SmartRecruiters]
+    ING --> DB[(SQLite: jobs, companies)]
+    DB --> FILTER[Filter Engine: keyword + location + seniority]
+    FILTER -->|passes| SHEET["Beacon Sheet: row added immediately"]
+    FILTER -->|fails| JOBLOG["Job Log Sheet: reason recorded"]
+    SHEET --> VISA[Visa Scanner]
+    VISA -->|regex, free| FLAG[Visa Flag set]
+    VISA -->|keyword pre-check, free| FLAG
+    VISA -->|genuinely ambiguous only| HAIKU[Claude Haiku]
+    HAIKU --> FLAG
+    FLAG -->|restricted| JOBLOG
+    SHEET -->|user flags 'Go Score'| FITSCORE[Claude Sonnet: fit score]
+    FITSCORE -->|below threshold| JOBLOG
+    FITSCORE -->|above threshold| SHEET
+    SHEET -.->|native Google rule| EMAIL[📧 Email notification]
+    SHEET -->|Decision column| POLLER[Approval Poller, every 30 min]
+```
+
+Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Language** | Python 3.14 |
+| **Scheduling** | APScheduler (`BlockingScheduler`, single-instance file lock) |
+| **Database** | SQLite, WAL mode |
+| **Tracking / UI / Notification** | Google Sheets via `gspread` (service account auth) |
+| **LLM** | Anthropic Claude — Haiku 4.5 (visa classification), Sonnet 5 (fit scoring) |
+| **Job sources** | Adzuna API, Greenhouse, Lever, Ashby, SmartRecruiters (all public/free) |
+| **Company data** | Financial Modeling Prep + StartupHub.ai (both free tier) |
+| **Location resolution** | US Census county/place reference data (bundled, public domain) |
+| **HTTP** | `requests`, with retry/backoff on rate limits and transient errors |
+
+---
+
+## 💰 Cost Model — AI Only When It's Actually Needed
+
+Real numbers from this project's own live history, not an estimate:
+
+| Metric | Value |
+|---|---|
+| Jobs ever ingested | **137,318** |
+| Companies tracked | **2,674** (161 with a direct, confirmed ATS board) |
+| Jobs classified `No mention` (sponsorship not discussed at all) — **$0, regex/keyword only** | **9,238** |
+| Jobs classified `restricted` — a real sponsorship dead-end, automatically caught before you'd waste time on it | **577** |
+| Jobs classified `sponsors` — a confirmed positive signal | **103** |
+| **Total cumulative LLM spend, across every visa classification and every fit-score ever run** | **$8.88** |
+
+That's not "$8.88 to process a small sample" — that's the *entire lifetime spend* of a pipeline that's ingested well over 100,000 postings. The reason it stays this cheap:
+
+1. **Company enrichment never touches an LLM at all.** Two free APIs only; if neither has a field, it just stays blank. The earlier design (Sonnet + web search as a fallback) was removed entirely once it became clear it was costing $0.15–0.75 *per company* — by far the most expensive thing in the whole pipeline for the least differentiated value.
+2. **Fit-scoring is opt-in per job**, not run against the backlog automatically — you flag a posting `Go Score` on the Sheet, and only then does a Sonnet call happen.
+3. **Visa classification's free keyword pre-check** resolves the large majority of postings (anything that never mentions `visa`/`sponsor`/`citizen`/`h1b`/etc. at all) with zero LLM involvement, and a regex pass catches most of what's left. Haiku only ever sees the genuinely ambiguous remainder — and at Haiku's pricing, even that remainder costs fractions of a cent per job.
+
+---
+
+## ⚙️ Setup
+
+### Prerequisites
+- Python 3.14 (or 3.12 if 3.14 wheels are unavailable for a dependency)
+- A free [Adzuna developer account](https://developer.adzuna.com)
+- A free [Anthropic API key](https://console.anthropic.com)
+- A free [Financial Modeling Prep](https://financialmodelingprep.com) key and [StartupHub.ai](https://startuphub.ai) key
+- A Google Cloud **service account** (not OAuth) shared as an Editor on two Google Sheets you create yourself — one for active matches ("Beacon"), one for excluded jobs ("Job Log")
+
+### Installation
+
+```bash
+git clone https://github.com/algoshank/beacon.git
+cd beacon
+
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
+
+pip install -r requirements.txt
+
+cp .env.example .env
+# Open .env and fill in your own API keys and Sheet IDs
+# Place your Google service-account JSON key at the path GOOGLE_SHEETS_CREDENTIALS_PATH points to
+```
+
+### First run
+
+```bash
+python -m app.cli migrate                              # create the DB schema
+python -m app.cli seed-filters --file seed_filters.yaml # load default filter criteria
+cp seed_companies.example.yaml seed_companies.yaml      # start your own target-company list
+python -m app.cli seed-companies --file seed_companies.yaml
+python -m app.cli pipeline                              # one manual end-to-end run
+```
+
+### Running continuously
+
+```bash
+python -m app.scheduler
+```
+
+Runs the main pipeline 3x/day (default 8am/1pm/6pm), fit-scoring and company enrichment on their own offset schedules, and an approval poller every 30 minutes — all inside one locked, crash-recovering process. See [`RUNBOOK.md`](./RUNBOOK.md) for keeping it running across restarts on Windows.
+
+---
+
+## 📁 Project Structure
+
+```
+beacon/
+├── app/
+│   ├── sources/            # Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters pollers
+│   ├── data/                # Bundled US Census reference data (public domain)
+│   ├── migrations/          # Numbered SQL schema migrations
+│   ├── sheets.py             # Beacon sheet reads/writes
+│   ├── job_log.py            # Job Log sheet reads/writes
+│   ├── filter_engine.py      # Keyword/seniority/location filtering
+│   ├── visa_scan.py           # Three-tier visa classification
+│   ├── fit_scoring.py         # Resume-vs-JD scoring (Sonnet)
+│   ├── enrichment.py          # Free-only company data enrichment
+│   ├── seed_via_sheet.py       # Type-a-name-to-onboard-a-company
+│   ├── scheduler.py            # APScheduler process entrypoint
+│   └── cli.py                   # Manual command-line entrypoints
+├── tests/                    # pytest suite (fakes for Sheets/HTTP, no live calls)
+├── docs/
+│   ├── ARCHITECTURE.md        # Full system diagram + data flow
+│   └── screenshots/            # README images
+├── seed_companies.example.yaml # Safe template — copy to seed_companies.yaml
+├── seed_filters.yaml            # Default filter keyword/threshold seed data
+├── .env.example                  # Safe credential template
+└── RUNBOOK.md                     # Day-to-day operating guide
+```
+
+**Never committed** (see `.gitignore`): `.env`, `service_account.json`, `job_search.db*`, `resumes/`, `scheduler.log`.
+
+---
+
+## 🔐 Security
+
+- No credentials are hardcoded anywhere in the source — every secret is loaded from `.env` or the service-account JSON path, both gitignored
+- `.env.example` and `seed_companies.example.yaml` contain placeholder/template values only
+- The live SQLite database (which contains real scraped postings and personal application decisions) and the real service-account key are never committed
+- See [`PUBLISHING_GUIDE.md`](./PUBLISHING_GUIDE.md) for the full secret-audit checklist this repo was published against
+
+---
+
+## ❓ FAQ
+
+**Does this scrape LinkedIn?**
+No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it — every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.
+
+**Is my data private?**
+Everything runs locally on your own machine against your own SQLite database and your own Google Sheets — nothing is sent anywhere except the API calls you configure (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub). Nobody else sees your search activity or your decisions.
+
+**How much does it actually cost to run?**
+See [Cost Model](#-cost-model--ai-only-when-its-actually-needed) — this project's own real lifetime spend, across 137,000+ jobs processed, is $8.88.
+
+**Do I need to know Python to use this?**
+You need to be comfortable running a few CLI commands and editing a `.env` file (see [Setup](#️-setup)). Day-to-day use afterward is entirely in Google Sheets.
+
+**Can I use this for a non-tech job search?**
+Yes — nothing in the filter/keyword design is tech-specific. The example keyword lists target Solutions Architect/Presales-style roles because that's what this was originally built for, but every keyword, title exclusion, and threshold lives in an editable table, not code.
+
+**Why Google Sheets instead of a real dashboard?**
+Because you already know how to use it, it's free, it's already got notifications/mobile access/sharing solved, and it means zero UI code to build or maintain.
+
+---
+
+## 🛣️ Roadmap
+
+- Batch Google Sheets writes (`append_rows` + in-memory duplicate-check) instead of one API call per job — the current per-job cost is what makes a large backlog slow
+- Automatic re-validation of jobs already on the sheet against later filter-criteria changes (today, only newly-ingested jobs are checked against the *current* rules)
+- Resume/cover-letter generation handoff to Claude Desktop on Approve (designed, not yet built)
+- Real DOL/USCIS historical H-1B sponsorship data as a second signal, alongside today's posting-text-only classification
+
+---
+
+## 🤖 Built With
+
+This entire pipeline — architecture, every source integration, the visa classification design, the Sheets automation, the test suite, and every bug fix along the way — was built through an extended pair-programming process with **[Claude Code](https://claude.com/claude-code)**, Anthropic's agentic CLI. The full build narrative, including real bugs found and fixed live against production data, is documented in [`RUNBOOK.md`](./RUNBOOK.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](./LICENSE).
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=algoshank/beacon&type=Date)](https://star-history.com/#algoshank/beacon&Date)
+
+---
+
+*Built for anyone tired of finding out on page 3 of a job description that they were never going to be considered.*

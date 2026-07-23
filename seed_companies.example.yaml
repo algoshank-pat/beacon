@@ -1,0 +1,32 @@
+# Example seed company list — copy to seed_companies.yaml and replace with your
+# real S/A-tier target companies before running `python -m app.cli seed-companies`.
+#
+# Only `name` is required. `source_type` should be 'greenhouse' | 'lever' | 'ashby' |
+# 'smartrecruiters' | 'manual' and, when set to one of the four ATS values, `board_url`
+# should be that company's board slug so the targeted-tracking pollers can use it directly.
+# 'manual' means no confirmed direct ATS board was found — the company still gets
+# surfaced via Adzuna's broad keyword discovery instead.
+companies:
+  - name: "Anthropic"
+    board_url: "anthropic"
+    source_type: "greenhouse"
+    priority_tier: "A"
+    industry: "Artificial Intelligence / Frontier AI Lab"
+    notes: "Confirmed Greenhouse board."
+  - name: "OpenAI"
+    board_url: "openai"
+    source_type: "ashby"
+    priority_tier: "A"
+    notes: "Confirmed Ashby board."
+  - name: "Google"
+    source_type: "manual"
+    priority_tier: "A"
+    notes: "No confirmed Greenhouse/Lever/Ashby/SmartRecruiters board (runs its own custom career site) — relies on Adzuna broad discovery only."
+  - name: "Microsoft"
+    source_type: "manual"
+    priority_tier: "A"
+    notes: "Same as Google — custom career site, no direct ATS board found."
+  - name: "Amazon"
+    source_type: "manual"
+    priority_tier: "A"
+    notes: "Same as Google/Microsoft — custom career site, no direct ATS board found."

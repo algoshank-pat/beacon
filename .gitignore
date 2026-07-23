@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+service_account.json
+service_account.json.json
+*.db
+*.db-wal
+*.db-shm
+.pytest_cache/
+resumes/
+scheduler.log
+scheduler.lock
+.claude/
+seed_companies.yaml

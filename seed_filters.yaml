@@ -1,0 +1,249 @@
+# seed_filters.yaml — only used once, to populate filter_settings/filter_keywords
+# on first setup (python -m app.cli seed-filters). After that, edit live via the
+# Settings UI (M3.5) or by editing the tables directly — this file is not re-read
+# automatically.
+
+# --- filter_keywords: category -> list of keywords (each becomes one row, is_active=1) ---
+role_keyword_include:
+  - "Solutions Architect"
+  - "Solution Architect"
+  - "AI Solutions Architect"
+  - "Presales Engineer"
+  - "Presales Solutions Architect"
+  - "Senior Solutions Architect"
+  - "Technical Sales Engineer"
+  - "Sales Engineer"
+  - "Solutions Consultant"
+  - "Enterprise Architect"
+  - "Integration Architect"
+  - "Solutions Engineer"
+  - "Customer Engineer"
+  - "Principal Solutions Architect"
+  - "Staff Solutions Architect"
+  - "Senior Engineer - Integration & API Architecture"
+  - "Senior Integration Architect"
+  - "Sr Integration Engineer"
+  - "Sr. Application Integration Engineer"
+
+tech_keyword_include:
+  - "Integration"
+  - "API Management"
+  - "EDI B2B Analyst"
+  - "EDI Analyst"
+  - "B2B Analyst"
+  - "MFT"
+  - "Managed File Transfer"
+  - "Event Driven Architecture"
+  - "AI Gateway"
+  - "LLM Gateway"
+  - "MCP Server"
+  - "MCP Gateway"
+  - "Messaging"
+  - "iPaaS"
+  - "ESB"
+  - "API Gateway"
+  - "MuleSoft"
+  - "Boomi"
+  - "webMethods"
+  - "Apigee"
+  - "Kong"
+  - "X12"
+  - "EDIFACT"
+  - "Kafka"
+  - "Agentic AI"
+
+title_exclude:
+  - "Intern"
+  - "Contract"
+  - "Staffing"
+  - "HVAC"
+  - "Industrial Sales Engineer"
+  - "Office Assistant"
+  - "Therapist"
+  - "Clinical Supervisor"
+  - "Technical Instructor"
+  - "Clinician"
+  - "LMFT"
+  - "Parent Partner"
+  - "Assessment Counselor"
+  - "Registered Nurse"
+  - "Agent Marketplace"
+  - "AI Enablement Specialist"
+  - "GTM"
+  - "Product Marketing"
+  - "Sales Enablement"
+  - "Support Experience"
+  - "Developer SDKs"
+  - "Staff Solutions Engineer - Commercial"
+  - "Agent Post-Training"
+  - "AI Deployment Engineer"
+  - "Mechanical"
+  - "Firmware Engineer, Robotics"
+  - "Robotics Software Engineer"
+  - "Full Stack Software Engineer"
+  - "Head of Communications"
+  - "Business Development"
+  - "Data Scientist"
+  - "Employment Counsel"
+  - "Web Layer"
+  - "API Multicloud"
+  - "Scaled Abuse"
+  - "Supply Chain Transformation"
+  - "Platform Operations"
+  - "Infrastructure Accounting"
+  - "RTL Engineer"
+  - "Packaging Reliability"
+  - "Strategic Delivery Lead"
+  - "Recruiting Systems"
+  - "Payroll Operations"
+  - "Salesforce Ads"
+  - "Technical Deployment Lead"
+  - "Physical Security"
+  - "Hardware Operations"
+  - "Integrated Marketing"
+  - "Principal Partner Solutions Consultant"
+  - "Partner Marketing"
+  - "Partner Incentive"
+  - "Visual Storytelling"
+  - "Marketing Scientist"
+  - "Channel Partnerships"
+  - "Member of Recruiting Staff"
+  - "Travel & Expense"
+  - "Nurse"
+  # Blanket career-level exclusion, not a title-collision patch (per direct
+  # request: "I cannot take managerial or director roles" -- a visa
+  # constraint, not a preference). Substring match (this category's usual
+  # rule), so it also catches "Sr. Director", "Director, Product
+  # Management", "Engineering Manager", etc. without needing every variant
+  # spelled out. Known, accepted collision: "Director" also matches
+  # "Directory" (e.g. "...Universal Directory") -- checked live, only one
+  # such job exists in the DB and it isn't even on Beacon, so not worth a
+  # word-boundary carve-out that would change every other title_exclude
+  # term's matching behavior. Supersedes and replaces ~12 narrower
+  # Manager/Director-specific terms added earlier this session as one-off
+  # patches (Accounting Manager, Business Development Manager, Communications
+  # Manager, Creative Director, Account Director, Engineering Manager HADR,
+  # GRC Program Manager, Partner Program Director, Sales Manager Enterprise
+  # Digital Natives, Sales Strategy and Operations Manager, Strategic
+  # Solutions Engineering Director, Technical Program Manager) -- deactivated
+  # in the DB (seed-filters is add-only, so removal from this file alone
+  # doesn't retroactively deactivate) rather than left redundant.
+  - "Director"
+  - "Manager"
+  # Sales/marketing/customer-facing non-technical titles reported live as not
+  # a fit ("Customer Marketing Lead, Account Executive, Inside Sales
+  # Representatives, Marketing executive, Market Leader, Service Assistant,
+  # VP are not my roles"). Root-caused: every one of these matched purely via
+  # tech_keyword_include hitting ordinary company "About Us" boilerplate in
+  # the description ("Integration", "iPaaS", "Agentic AI", "AI Gateway"), not
+  # a real role match -- 98 "Account Executive" postings alone were live on
+  # Beacon this way. Checked all 98 titles individually before excluding:
+  # none are hybrid/technical roles, all pure sales.
+  - "Account Executive"
+  - "Customer Marketing"
+  - "Inside Sales Representative"
+  - "Inside Sales Rep"
+  - "Marketing Executive"
+  - "Market Leader"
+  - "Service Assistant"
+  # "VP" is a blanket career-level exclusion like Director/Manager above
+  # (same visa constraint), not a title-collision patch. Checked live for
+  # collisions first: AVP/RVP/SVP (all real VP-level variants, correctly
+  # also excluded) are the only other titles in the DB containing "VP" --
+  # no VPN-type false positive currently exists, though that's a known,
+  # accepted future risk of the same kind as "Contract" also catching
+  # "Contractor".
+  - "VP"
+  # "Executive Chef | Cantonese Cuisine" reported live -- root-caused to a
+  # real keyword-matching bug, not just a title_exclude gap: tech_keyword_
+  # include's "Kong" (the tracked API-gateway company) was matching the
+  # place name "Hong Kong" in the description ("...Hong Kong-inspired
+  # restaurant..."), unrelated to the company entirely. Fixed at the source
+  # in app.filter_engine._contains_any_word (a lookbehind excluding "Kong"
+  # immediately preceded by "hong "/"hong-"), which also caught 12 other
+  # unrelated jobs live matching the same way. "Chef" added here too as a
+  # direct backstop per the report, in case a genuinely chef/culinary
+  # posting ever matches some other keyword in the future.
+  - "Chef"
+
+seniority:
+  - "mid"
+  - "senior"
+  - "staff"
+
+remote_type:
+  - "remote"
+  - "hybrid"
+
+location_include: []
+
+industries_include: []
+
+# --- filter_settings: scalar key -> value ---
+fit_score_threshold: 60
+company_priority_min: "B"
+require_visa_sponsorship: false
+require_h1b_track_record: false
+require_us_location: true
+employee_count_min: 0
+employee_count_max: null
+founded_after_year: null
+remote_only: false
+generate_cover_letter: true
+approval_reminder_hours: 48
+approval_poll_interval_minutes: 30
+main_pipeline_schedule_times: "08:00,13:00,18:00"
+approval_poller_max_consecutive_failures: 3
+posted_within_days: 30
+pipeline_paused: false
+job_log_enabled: true
+daily_token_budget: 1.00
+monthly_token_budget: 15.00
+# Company enrichment (FMP + StartupHub.ai): FMP's free tier is capped at
+# 250 requests/day (confirmed via FMP's published pricing page); each
+# company costs 1 FMP call (private, no ticker match -- the common case) or
+# 2 (publicly traded: search + profile). Cumulative across all of today's
+# runs (see app.enrichment.get_enriched_today_count), not a flat per-run cap.
+# Raised from 100 to 200/day once live data showed real usage sits well
+# under the 2-call worst case -- 0 of the first 7 companies enriched were
+# public matches, so realistic cost is closer to 1 call/company. Worst case
+# at 200/day is 400 calls (only if every company were public, which this
+# startup-heavy company list essentially never produces); realistic usage is
+# ~200-220/day, still under FMP's 250 ceiling. StartupHub.ai has no
+# published rate limit -- the cap is sized around FMP's confirmed, harder
+# constraint instead of guessing at StartupHub's.
+daily_enrichment_limit: 200
+# app.link_check: re-verifies Beacon jobs app.ingest.detect_closed_jobs
+# can't cover (Adzuna-sourced, 78% of Beacon at the time this was built --
+# Adzuna's API has no "list all this employer's open jobs" endpoint, so
+# closure can't be detected by re-polling). Runs once per main-pipeline
+# cycle (3x/day), rechecking the least-recently-checked jobs first, so the
+# whole backlog is gradually covered rather than the same jobs rechecked
+# repeatedly. Unlike daily_enrichment_limit, this has no external quota to
+# respect -- the cap here is purely about not adding excessive latency to
+# a single pipeline run (each check is one HTTP request, up to 15s with
+# retries). 200/run clears the initial ~1,900-job backlog in about 3 days
+# at 3 runs/day, then settles into steady-state (only new jobs + periodic
+# re-checks of old ones).
+link_check_batch_size: 200
+# app.salary_refresh: re-attempts salary extraction via the full posting
+# page for jobs still missing a real salary after the cheap description-
+# only extraction at add-time (app.sheets.add_job_to_beacon). Real gap
+# found live, reported directly: a job's real "$85,000 to $95,000" salary
+# line sat past Adzuna's 500-char description cap, so Beacon showed
+# Adzuna's unrelated algorithmic estimate instead. No external quota here
+# either (same reasoning as link_check_batch_size) -- purely a per-run
+# latency cap. Not every job's full page is actually fetchable this way
+# (some Adzuna redirects are client-side JS to an external board, which a
+# plain HTTP client can't follow) -- those are simply left as they were,
+# stamped checked so they aren't retried forever.
+salary_refresh_batch_size: 200
+# app.cloud_platforms_refresh: re-checks AWS/GCP/Azure mentions via the full
+# posting page for jobs whose stored description is truncated (Adzuna's
+# 500-char cap). Real gap found live, reported directly: comparing AWS vs
+# GCP vs Azure mention counts surfaced that most jobs had no cloud label at
+# all -- confirmed 87.8% of Adzuna-sourced jobs on Beacon were truncated to
+# exactly 500 characters. Same no-external-quota reasoning as
+# link_check_batch_size/salary_refresh_batch_size -- purely a per-run
+# latency cap.
+cloud_platforms_refresh_batch_size: 200

@@ -1,0 +1,10 @@
+click==8.1.7
+python-dotenv==1.0.1
+PyYAML==6.0.2
+pytest==8.3.3
+requests==2.32.3
+anthropic==0.115.1
+python-docx==1.2.0
+gspread==6.2.1
+tzdata==2026.2
+apscheduler==3.11.3

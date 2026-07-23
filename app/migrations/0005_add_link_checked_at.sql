@@ -1,0 +1,11 @@
+-- Adzuna's API is a bounded keyword search, not a "list all this employer's
+-- open jobs" endpoint, so app.ingest.detect_closed_jobs's re-poll-and-diff
+-- approach (built for Greenhouse/Lever/Ashby) can't detect an Adzuna
+-- posting closing -- confirmed live: 78% of jobs on Beacon are Adzuna-
+-- sourced and had zero closed-job detection at all. app.link_check instead
+-- periodically re-fetches each such job's own URL directly and checks for
+-- a definitive 404/410. This timestamp is what makes that safe to run
+-- repeatedly without re-checking the same links over and over -- same
+-- "only touch what hasn't been checked recently" pattern as
+-- financial_data_last_checked/startuphub_last_checked (see migration 0004).
+ALTER TABLE jobs ADD COLUMN link_checked_at TIMESTAMP;

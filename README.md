@@ -57,7 +57,7 @@ Fair question — here's the honest comparison, not a sales pitch. LinkedIn Prem
 ### AI touches exactly two decisions in this entire pipeline
 
 1. **Visa fit** — does this posting's own text rule you out on sponsorship? Only asked when free keyword/regex checks genuinely can't tell.
-2. **Job fit** — does this posting match your resume well enough to be worth pursuing? Only asked when *you* type `Go Score` on that specific row.
+2. **Job fit** — does this posting match your resume well enough to be worth pursuing? Only asked when *you* type `Go Score` (short for "go score job fit") into that specific row's **My Decision** cell.
 
 Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved. Here's exactly how each of those two decisions gets made:
 
@@ -79,12 +79,12 @@ Three tiers, cheapest first — a real posting only ever reaches an LLM if a hum
 
 ### You put AI on command, one job at a time
 
-The resume-fit scoring step (Claude Sonnet) never runs on its own. It's controlled entirely by a single Sheet column, **My Decision**, which is just a dropdown on each row:
+The resume-fit scoring step (Claude Sonnet) never runs on its own. It's controlled entirely by a single Sheet column, **My Decision**, which is just a dropdown on each row. `Go Score` here means specifically "go score *job fit*" against your resume — it has nothing to do with visa fit, which is checked automatically and never needs a manual trigger:
 
 | Value | Who sets it | What happens |
 |---|---|---|
 | `New` | App, by default | Nothing. This is every job's starting state — no AI has looked at it |
-| `Go Score` | **You** | You're telling the pipeline "spend an AI call scoring this one against my resume." Nothing happens to any other row |
+| `Go Score` (i.e. "go score job fit") | **You** | You're telling the pipeline "spend an AI call scoring this one against my resume." This is the only manual AI trigger anywhere in the pipeline — nothing happens to any other row |
 | `AI Score Pending` | App | Claimed right before the Sonnet call, so a failure retries automatically instead of getting stuck or silently skipped |
 | `AI Scored` | App | Done — the score is now on the row |
 | `Manual Scored` | You | Your own judgment call, no AI involved at all |

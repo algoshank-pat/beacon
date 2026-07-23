@@ -31,7 +31,9 @@
 
 ## 🎯 The Goal
 
-**Make this work reliably, and make the cost truly minimal.** It's low cost: under $1/month for typical personal use today (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed) for the real numbers). And it can be free: the stretch goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all, getting all the way to **$0** ongoing cost without giving up reliability.
+**Every work visa holder should be able to find jobs suitable for them, and apply to companies that actually sponsor work visas, with real information about who has sponsored before.** That's the point: less headache, less wasted time, more of your search actually going toward employers who'll consider you.
+
+And this has to stay free for anyone to adopt without a second thought. It's already low cost today, under $1/month for typical personal use (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed) for the real numbers) — but "low cost" still means worrying about a bill. The real goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all: **$0**, permanently, so nobody has to think about AI spend to run their own job search.
 
 ---
 

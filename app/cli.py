@@ -285,6 +285,33 @@ def enrich_companies_cmd(limit: int | None) -> None:
     )
 
 
+@cli.command(name="lca-enrich")
+@click.argument("xlsx_path", type=click.Path(exists=True, dir_okay=False))
+def lca_enrich_cmd(xlsx_path: str) -> None:
+    """Match tracked companies against a manually-downloaded DOL/OFLC LCA
+    disclosure .xlsx file, populating companies.dol_lca_employer_name and
+    last_lca_certified_date for every match. DOL's site blocks unattended
+    downloads, so there's no automated fetch here -- download the quarterly
+    file yourself from https://www.dol.gov/agencies/eta/foreign-labor/performance
+    (expand "Disclosure Data" -> LCA Programs) and pass its path here."""
+    from app.lca_enrichment import parse_lca_disclosure_file, run_lca_enrichment
+
+    click.echo(f"Parsing {xlsx_path} (this can take a few minutes for a large quarterly file)...")
+    parsed = parse_lca_disclosure_file(xlsx_path)
+    click.echo(f"Found {len(parsed)} unique certified employers in the file.")
+
+    conn = get_connection()
+    try:
+        result = run_lca_enrichment(conn, parsed)
+    finally:
+        conn.close()
+
+    click.echo(
+        f"Checked {result['companies_checked']} tracked company(s): "
+        f"{result['matched']} matched to a real LCA filing history."
+    )
+
+
 @cli.command(name="approval-poll")
 def approval_poll_cmd() -> None:
     """Read the Decision column on every Beacon job awaiting a decision --

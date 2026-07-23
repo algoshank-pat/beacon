@@ -8,3 +8,4 @@ python-docx==1.2.0
 gspread==6.2.1
 tzdata==2026.2
 apscheduler==3.11.3
+openpyxl==3.1.5

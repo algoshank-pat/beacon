@@ -388,10 +388,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
-## ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=algoshank-pat/beacon&type=Date)](https://star-history.com/#algoshank-pat/beacon&Date)
-
----
-
 *Built for anyone tired of finding out on page 3 of a job description that they were never going to be considered.*

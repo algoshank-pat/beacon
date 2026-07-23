@@ -70,6 +70,21 @@ Every posting →  keyword match (role/tech titles)  →  does it even mention "
 
 Three tiers, cheapest first — a real posting only ever reaches an LLM if a human would also have to actually read the sentence carefully to decide. Everything upstream of that (does this even look like a role I want, does it even mention sponsorship at all) is free, deterministic Python.
 
+### You put AI on command, one job at a time
+
+The resume-fit scoring step (Claude Sonnet) never runs on its own. It's controlled entirely by a single Sheet column, **My Decision**, which is just a dropdown on each row:
+
+| Value | Who sets it | What happens |
+|---|---|---|
+| `New` | App, by default | Nothing. This is every job's starting state — no AI has looked at it |
+| `Go Score` | **You** | You're telling the pipeline "spend an AI call scoring this one against my resume." Nothing happens to any other row |
+| `AI Score Pending` | App | Claimed right before the Sonnet call, so a failure retries automatically instead of getting stuck or silently skipped |
+| `AI Scored` | App | Done — the score is now on the row |
+| `Manual Scored` | You | Your own judgment call, no AI involved at all |
+| `Reject` | You | Removes the row, no AI involved |
+
+There's no "score everything" button, and no background job silently scoring your whole backlog. Every single Sonnet call in this pipeline exists because you typed `Go Score` into one specific cell. That's what "AI where it matters, automation everywhere else" actually looks like in practice, not just as a slogan.
+
 ---
 
 ## 📸 Screenshots

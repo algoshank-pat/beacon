@@ -54,6 +54,13 @@ Fair question — here's the honest comparison, not a sales pitch. LinkedIn Prem
 
 **The honest summary**: Beacon doesn't replace everything LinkedIn Premium does (it won't teach you a course or show you profile-view analytics). It replaces the one feature visa holders actually need most — "will this company even consider me" — which LinkedIn has never built, at roughly 2% of a single month's subscription cost, running for as long as your job search takes.
 
+### AI touches exactly two decisions in this entire pipeline
+
+1. **Visa fit** — does this posting's own text rule you out on sponsorship? Only asked when free keyword/regex checks genuinely can't tell.
+2. **Job fit** — does this posting match your resume well enough to be worth pursuing? Only asked when *you* type `Go Score` on that specific row.
+
+Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved. Here's exactly how each of those two decisions gets made:
+
 ### How the keyword + AI pipeline actually works
 
 ```

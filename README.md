@@ -380,6 +380,9 @@ beacon/
 **Can you get me a job, or tell me which companies sponsor visas?**
 No. See the [Disclaimer](#️-disclaimer) above — there's no curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. This tool reads a specific job posting's own text and classifies what *that posting* says, nothing more.
 
+**Can I use more than one resume?**
+Not yet — a real, known limitation. Fit-scoring always reads a single file (`resumes/base_resume.md`, falling back to `.txt` then `.docx`, first match wins), with no way to select a different one per job or per role type. If you want to score against different resumes for different kinds of roles, today's only workaround is manually swapping the file between runs.
+
 **Does this scrape LinkedIn?**
 No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it — every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.
 

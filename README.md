@@ -375,7 +375,9 @@ Because you already know how to use it, it's free, it's already got notification
 - Batch Google Sheets writes (`append_rows` + in-memory duplicate-check) instead of one API call per job — the current per-job cost is what makes a large backlog slow
 - Automatic re-validation of jobs already on the sheet against later filter-criteria changes (today, only newly-ingested jobs are checked against the *current* rules)
 - Resume/cover-letter generation handoff to Claude Desktop on Approve (designed, not yet built)
-- Real DOL/USCIS historical H-1B sponsorship data as a second signal, alongside today's posting-text-only classification
+- **Real historical H-1B sponsorship data**, not just posting-text classification. Today's visa-fit check only reads what one specific posting says; it says nothing about a company's actual track record. The **USCIS H-1B Employer Data Hub** (official, free, no API key) publishes exactly that: employer name plus petitions approved/denied by fiscal year, "last sponsored in year X" and all. The DB schema already has unused columns waiting for this (`companies.h1b_sponsor_last_5yrs`, `h1b_petitions_last_5yrs`, `h1b_data_last_checked`). The real work isn't fetching the data, it's matching messy real-world company names against USCIS's employer names reliably (this project already hit the identical problem matching company names against a different data source — see `RUNBOOK.md`'s FMP name-collision entries)
+- **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
+- **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column
 
 ---
 

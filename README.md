@@ -83,6 +83,12 @@ Every posting →  keyword match (role/tech titles)  →  does it even mention "
 
 Three tiers, cheapest first — a real posting only ever reaches an LLM if a human would also have to actually read the sentence carefully to decide. Everything upstream of that (does this even look like a role I want, does it even mention sponsorship at all) is free, deterministic Python.
 
+**What Haiku actually sees and returns, for that last genuinely ambiguous tier:**
+- **Input**: the job's title, its location, and up to 12,000 characters of the description (not just a short prefix — sponsorship language is legal/EEO boilerplate that's frequently near the *end* of a posting, and an earlier, shorter truncation really did cut off the deciding sentence in testing)
+- **Task**: classify sponsorship specifically for *this posting's own location*, not sponsorship in general. A posting that says "we can sponsor visas to Germany" on a US-based role gets classified `restricted` for the US, not `sponsors`, even though the word "sponsor" appears in a positive sentence right there in the text
+- **Output**: a forced-structure JSON response, exactly `{"visa_flag": "restricted" | "sponsors" | "unclear", "snippet": "..."}` — never free-form text, and the snippet is a direct quote from the actual posting, not a paraphrase, so you can always see exactly which sentence drove the call
+- That result gets written straight to the job's row and, if it comes back `restricted`, the posting is automatically evicted from your Sheet before you ever see it as a live match
+
 ### You put AI on command, one job at a time
 
 The resume-fit scoring step (Claude Sonnet) never runs on its own. It's controlled entirely by a single Sheet column, **My Decision**, which is just a dropdown on each row. `Go Score` here means specifically "go score *job fit*" against your resume — it has nothing to do with visa fit, which is checked automatically and never needs a manual trigger:

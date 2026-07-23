@@ -31,7 +31,7 @@
 
 ## 🎯 The Goal
 
-**Make this work reliably, and make the cost truly minimal.** It's actually cheap: under $1/month for typical personal use today (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed) for the real numbers). And it can be free: the stretch goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all, getting all the way to **$0** ongoing cost without giving up reliability.
+**Make this work reliably, and make the cost truly minimal.** It's low cost: under $1/month for typical personal use today (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed) for the real numbers). And it can be free: the stretch goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all, getting all the way to **$0** ongoing cost without giving up reliability.
 
 ---
 

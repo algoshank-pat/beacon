@@ -13,3 +13,4 @@ scheduler.log
 scheduler.lock
 .claude/
 seed_companies.yaml
+scratchpad/

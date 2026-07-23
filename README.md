@@ -23,6 +23,12 @@
 
 ---
 
+## 🎯 The Goal
+
+**Make this work reliably, and make the cost truly minimal.** Not "cheap for what it does", genuinely minimal — the real-world target is under $1/month for typical personal use (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed) for what it actually costs today). The stretch goal, not built yet: run visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all, getting all the way to **$0** ongoing cost without giving up reliability. Cheap is good; reliable-and-free is the actual goal.
+
+---
+
 ## Why this exists
 
 If you're job-hunting on a visa (H-1B, OPT/STEM-OPT, or otherwise), you already know the real cost isn't finding job postings — it's the hours lost reading through postings that were never going to sponsor you in the first place, often three paragraphs deep in EEO boilerplate that never even mentions "visa" until the very last sentence.
@@ -373,6 +379,7 @@ Because you already know how to use it, it's free, it's already got notification
 - **Real historical H-1B sponsorship data**, not just posting-text classification. Today's visa-fit check only reads what one specific posting says; it says nothing about a company's actual track record. The **USCIS H-1B Employer Data Hub** (official, free, no API key) publishes exactly that: employer name plus petitions approved/denied by fiscal year, "last sponsored in year X" and all. The DB schema already has unused columns waiting for this (`companies.h1b_sponsor_last_5yrs`, `h1b_petitions_last_5yrs`, `h1b_data_last_checked`). The real work isn't fetching the data, it's matching messy real-world company names against USCIS's employer names reliably (this project already hit the identical problem matching company names against a different data source — see `RUNBOOK.md`'s FMP name-collision entries)
 - **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
 - **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column
+- **Adding other AI backends for visa and fit scoring, alongside Claude** — specifically open-weight models run locally on your own laptop (e.g. via Ollama), not just another paid API. This is the concrete path toward [the Goal](#-the-goal) of $0 ongoing cost: today's design already keeps Claude usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude's reliability on the same task first
 
 ---
 

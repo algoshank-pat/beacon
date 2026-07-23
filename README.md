@@ -10,11 +10,6 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Tag](https://img.shields.io/badge/for-H1B%20%2F%20Visa%20Holders-blueviolet)
 
-[![GitHub stars](https://img.shields.io/github/stars/algoshank-pat/beacon?style=social)](https://github.com/algoshank-pat/beacon/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/algoshank-pat/beacon?style=social)](https://github.com/algoshank-pat/beacon/network/members)
-![Last commit](https://img.shields.io/github/last-commit/algoshank-pat/beacon)
-![Issues](https://img.shields.io/github/issues/algoshank-pat/beacon)
-
 **Tags**: `h1b` `visa-sponsorship` `job-search` `international-students` `opt` `stem-opt` `immigration` `career-tools` `claude-ai` `automation`
 
 **If this saves you time, a ⭐ helps other visa holders find it too.**

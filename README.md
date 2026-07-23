@@ -59,7 +59,11 @@ Fair question — here's the honest comparison, not a sales pitch. LinkedIn Prem
 1. **Visa fit** — does this posting's own text rule you out on sponsorship? Only asked when free keyword/regex checks genuinely can't tell.
 2. **Job fit** — does this posting match your resume well enough to be worth pursuing? Only asked when *you* type `Go Score` (short for "go score job fit") into that specific row's **My Decision** cell.
 
-Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved. Here's exactly how each of those two decisions gets made:
+Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved.
+
+> **One word, "Go Score", is the only thing in this entire pipeline that ever spends an AI token on your behalf. Everything else, including visa screening, either runs on free pattern matching or doesn't run at all until you ask.**
+
+Here's exactly how each of those two decisions gets made:
 
 ### How the keyword + AI pipeline actually works
 

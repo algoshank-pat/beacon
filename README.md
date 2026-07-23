@@ -248,7 +248,14 @@ pip install -r requirements.txt
 cp .env.example .env
 # Open .env and fill in your own API keys and Sheet IDs
 # Place your Google service-account JSON key at the path GOOGLE_SHEETS_CREDENTIALS_PATH points to
+
+# Place your resume where fit-scoring looks for it (first match wins):
+#   resumes/base_resume.docx
+#   resumes/base_resume.md
+#   resumes/base_resume.txt
 ```
+
+**Fit-scoring needs your resume on disk to work at all.** Without a file at one of those three paths, typing `Go Score` on a job will fail with a clear "no base resume found" error rather than silently doing nothing. This file is gitignored and never leaves your machine, same as everything else in `resumes/`.
 
 ### First run
 

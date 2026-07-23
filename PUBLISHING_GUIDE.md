@@ -123,7 +123,7 @@ Fill in `docs/screenshots/` with real (redacted where noted) captures:
 |---|---|
 | `docs/screenshots/beacon_sheet.png` | The Beacon sheet — company/title/visa flag/score columns visible, Decision/My Decision columns blurred or cropped out |
 | `docs/screenshots/job_log_sheet.png` | The Job Log sheet with a few excluded jobs and their rejection reasons |
-| `docs/screenshots/database.png` | A terminal or DB-browser view of the SQLite schema and a sample query |
+| `docs/screenshots/database_schema.png` / `database_data.png` | A DB-browser view of the SQLite schema and a sample query — both already added |
 | `docs/screenshots/source_greenhouse.png` | A real public company's Greenhouse job board (no privacy concern — it's already public) |
 
 ```powershell

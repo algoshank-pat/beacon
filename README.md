@@ -74,15 +74,15 @@ Three tiers, cheapest first — a real posting only ever reaches an LLM if a hum
 
 ## 📸 Screenshots
 
-| Beacon Tracking Sheet | Job Log (Filtered/Excluded) |
+| Beacon Tracking Sheet | SQLite Schema |
 |---|---|
-| ![Beacon sheet with job postings, visa flags, and decision columns](./docs/screenshots/beacon_sheet.png) | ![Job Log sheet showing excluded postings with rejection reasons](./docs/screenshots/job_log_sheet.png) |
+| ![Beacon sheet with job postings, visa flags, and decision columns](./docs/screenshots/beacon_sheet.png) | ![SQLite database schema — all tables and indices](./docs/screenshots/database_schema.png) |
 
-| SQLite Schema & Sample Data | Source: a real Greenhouse job board |
+| Sample Company Data | Source: a real public Greenhouse job board |
 |---|---|
-| ![SQLite database schema and a sample query](./docs/screenshots/database.png) | ![A real company's public Greenhouse job board](./docs/screenshots/source_greenhouse.png) |
+| ![Sample rows from the companies table](./docs/screenshots/database_data.png) | ![Anthropic's real public Greenhouse job board](./docs/screenshots/source_greenhouse.png) |
 
-*(Company names, decisions, and salary figures in the screenshots above are from a live personal account — see the note in `docs/screenshots/README.md` for what's shown vs. redacted.)*
+*(Company/job data above is from a live personal account — the Decision/My Decision columns shown are unset defaults, not personal choices. See `docs/screenshots/README.md` for the full redaction notes.)*
 
 ---
 

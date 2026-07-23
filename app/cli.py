@@ -290,7 +290,8 @@ def enrich_companies_cmd(limit: int | None) -> None:
 def lca_enrich_cmd(xlsx_path: str) -> None:
     """Match tracked companies against a manually-downloaded DOL/OFLC LCA
     disclosure .xlsx file, populating companies.dol_lca_employer_name and
-    last_lca_certified_date for every match. DOL's site blocks unattended
+    last_lca_certified_date for every match, and pushing the match onto every
+    matched company's existing Beacon rows. DOL's site blocks unattended
     downloads, so there's no automated fetch here -- download the quarterly
     file yourself from https://www.dol.gov/agencies/eta/foreign-labor/performance
     (expand "Disclosure Data" -> LCA Programs) and pass its path here."""
@@ -300,9 +301,11 @@ def lca_enrich_cmd(xlsx_path: str) -> None:
     parsed = parse_lca_disclosure_file(xlsx_path)
     click.echo(f"Found {len(parsed)} unique certified employers in the file.")
 
+    settings = get_settings()
+    main_ws = resolve_main_worksheet(settings)
     conn = get_connection()
     try:
-        result = run_lca_enrichment(conn, parsed)
+        result = run_lca_enrichment(conn, parsed, main_ws=main_ws)
     finally:
         conn.close()
 

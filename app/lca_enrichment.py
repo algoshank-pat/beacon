@@ -83,7 +83,7 @@ def parse_lca_disclosure_file(path: str) -> dict[str, tuple[datetime | None, str
     return _extract_certifications(_rows())
 
 
-def run_lca_enrichment(conn: sqlite3.Connection, parsed: dict[str, tuple]) -> dict:
+def run_lca_enrichment(conn: sqlite3.Connection, parsed: dict[str, tuple], main_ws=None) -> dict:
     """Matches every tracked company against already-parsed LCA data by
     normalized name and updates `dol_lca_employer_name`/
     `last_lca_certified_date` for each match. `parsed` is the dict returned by
@@ -91,8 +91,16 @@ def run_lca_enrichment(conn: sqlite3.Connection, parsed: dict[str, tuple]) -> di
     separate argument (not a file path) so this function stays trivially
     testable and so multiple quarterly files can be merged (via repeated
     `_extract_certifications` calls picking the latest date) before a single
-    DB update pass."""
-    companies = conn.execute("SELECT id, name FROM companies").fetchall()
+    DB update pass.
+
+    If `main_ws` is given, also pushes the match onto every one of that
+    company's jobs currently on Beacon -- without this, a company matched
+    after its job's Beacon row already exists would never show the new
+    columns there (same gap app.enrichment._push_to_beacon exists to close
+    for FMP/StartupHub, reused here directly)."""
+    from app.sheets import update_company_columns
+
+    companies = conn.execute("SELECT * FROM companies").fetchall()
     matched = 0
     for company in companies:
         hit = parsed.get(_normalize(company["name"]))
@@ -103,6 +111,18 @@ def run_lca_enrichment(conn: sqlite3.Connection, parsed: dict[str, tuple]) -> di
             "UPDATE companies SET dol_lca_employer_name = ?, last_lca_certified_date = ? WHERE id = ?",
             (raw_name, decision_date.isoformat() if decision_date else None, company["id"]),
         )
+        conn.commit()
         matched += 1
-    conn.commit()
+
+        if main_ws is not None:
+            updated_company = conn.execute(
+                "SELECT * FROM companies WHERE id = ?", (company["id"],)
+            ).fetchone()
+            job_ids = conn.execute(
+                "SELECT id FROM jobs WHERE company_id = ? AND sheet_row_number IS NOT NULL",
+                (company["id"],),
+            ).fetchall()
+            for job_row in job_ids:
+                update_company_columns(main_ws, job_row["id"], updated_company)
+
     return {"companies_checked": len(companies), "matched": matched}

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from gspread.utils import ValidationConditionType
 
 from app.dates import format_central
-from app.sheets import display_visa_flag, format_salary_range
+from app.sheets import _format_lca_date, display_visa_flag, format_salary_range
 from app.sheets_retry import call_with_retry
 
 JOB_LOG_COLUMNS = [
@@ -34,6 +34,9 @@ JOB_LOG_COLUMNS = [
     "Decision", "Last Updated",
     # Appended at the end, same rationale as MAIN_SHEET_COLUMNS in app.sheets.
     "Cloud Platforms",
+    # Same as app.sheets.MAIN_SHEET_COLUMNS -- real historical sponsorship
+    # signal from app.lca_enrichment, distinct from Visa Flag.
+    "DOL LCA Match", "Last Sponsored",
 ]
 
 JOB_ID_COL_INDEX = JOB_LOG_COLUMNS.index("Job ID") + 1
@@ -223,6 +226,8 @@ def _build_row(
         row["Public/Private"] = company["company_type"] or ""
         row["Funding Stage"] = company["funding_stage"] or ""
         row["Revenue/Valuation"] = company["revenue_or_valuation"] or ""
+        row["DOL LCA Match"] = company["dol_lca_employer_name"] or ""
+        row["Last Sponsored"] = _format_lca_date(company["last_lca_certified_date"])
     row["Apply URL"] = job["apply_url"] or job["url"]
     row["Last Updated"] = format_central(datetime.now(timezone.utc))
     return [row[col] for col in JOB_LOG_COLUMNS]

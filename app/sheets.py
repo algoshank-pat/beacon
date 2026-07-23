@@ -66,6 +66,13 @@ MAIN_SHEET_COLUMNS = [
     # column writes are positional, and appending needs no live data move.
     # Computed by app.cloud_platforms at ingest time from title+description.
     "Cloud Platforms",
+    # Real historical sponsorship signal from app.lca_enrichment -- distinct
+    # from Visa Flag, which only ever reads this one posting's own text.
+    # "DOL LCA Match" shows the exact employer name matched in DOL's public
+    # LCA disclosure data (blank if never matched), so a wrong match is
+    # visible and auditable rather than a silent black box. "Last Sponsored"
+    # is that employer's most recent Certified/Certified-Withdrawn LCA date.
+    "DOL LCA Match", "Last Sponsored",
 ]
 
 JOB_ID_COL_INDEX = MAIN_SHEET_COLUMNS.index("Job ID") + 1
@@ -81,6 +88,8 @@ MY_DECISION_COL_INDEX = MAIN_SHEET_COLUMNS.index("My Decision") + 1
 SCORE_COL_INDEX = MAIN_SHEET_COLUMNS.index("Initial Fit Score") + 1
 EMPLOYEE_COUNT_COL_INDEX = MAIN_SHEET_COLUMNS.index("Employee Count") + 1
 REVENUE_VALUATION_COL_INDEX = MAIN_SHEET_COLUMNS.index("Revenue/Valuation") + 1
+DOL_LCA_MATCH_COL_INDEX = MAIN_SHEET_COLUMNS.index("DOL LCA Match") + 1
+LAST_SPONSORED_COL_INDEX = MAIN_SHEET_COLUMNS.index("Last Sponsored") + 1
 
 DECISION_VALUES = ["Pending", "Approve", "Deny"]
 
@@ -643,8 +652,19 @@ def build_main_row(
         row["Public/Private"] = company["company_type"] or ""
         row["Funding Stage"] = company["funding_stage"] or ""
         row["Revenue/Valuation"] = company["revenue_or_valuation"] or ""
+        row["DOL LCA Match"] = company["dol_lca_employer_name"] or ""
+        row["Last Sponsored"] = _format_lca_date(company["last_lca_certified_date"])
     row["Apply URL"] = job["apply_url"] or job["url"]
     return [row[col] for col in MAIN_SHEET_COLUMNS]
+
+
+def _format_lca_date(iso_datetime: str | None) -> str:
+    """last_lca_certified_date is stored as a full ISO datetime
+    (app.lca_enrichment uses date.isoformat() on a datetime); the Sheet only
+    needs the date part."""
+    if not iso_datetime:
+        return ""
+    return iso_datetime.split("T")[0]
 
 
 def add_job_to_beacon(
@@ -747,6 +767,18 @@ def update_company_columns(ws, job_id: int, company: sqlite3.Row) -> int | None:
             company["revenue_or_valuation"] or "",
         ]],
         range_name=f"{start_col}{row_number}:{end_col}{row_number}",
+        value_input_option="USER_ENTERED",
+    )
+
+    lca_start_col = _col_letter(DOL_LCA_MATCH_COL_INDEX)
+    lca_end_col = _col_letter(LAST_SPONSORED_COL_INDEX)
+    call_with_retry(
+        ws.update,
+        values=[[
+            company["dol_lca_employer_name"] or "",
+            _format_lca_date(company["last_lca_certified_date"]),
+        ]],
+        range_name=f"{lca_start_col}{row_number}:{lca_end_col}{row_number}",
         value_input_option="USER_ENTERED",
     )
     return row_number

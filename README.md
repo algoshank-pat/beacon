@@ -23,6 +23,12 @@
 
 ---
 
+## ⚠️ Disclaimer
+
+**This is not legal or immigration advice, and I'm not a recruiter, employer, or immigration attorney.** Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, doesn't guarantee any company will actually sponsor you, and doesn't maintain a curated list of "companies that sponsor visas" anywhere. There is no list. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
+
+---
+
 ## 🎯 The Goal
 
 **Make this work reliably, and make the cost truly minimal.** Not "cheap for what it does", genuinely minimal — the real-world target is under $1/month for typical personal use (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed) for what it actually costs today). The stretch goal, not built yet: run visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all, getting all the way to **$0** ongoing cost without giving up reliability. Cheap is good; reliable-and-free is the actual goal.
@@ -370,6 +376,9 @@ beacon/
 ---
 
 ## ❓ FAQ
+
+**Can you get me a job, or tell me which companies sponsor visas?**
+No. See the [Disclaimer](#️-disclaimer) above — there's no curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. This tool reads a specific job posting's own text and classifies what *that posting* says, nothing more.
 
 **Does this scrape LinkedIn?**
 No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it — every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.

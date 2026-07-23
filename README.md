@@ -281,10 +281,31 @@ python -m app.cli pipeline                              # one manual end-to-end 
 
 | File | What it controls | If you skip it |
 |---|---|---|
-| **`seed_filters.yaml`** | Your job-title keywords (`role_keyword_include`), skill/tech keywords (`tech_keyword_include`), title exclusions, seniority, location, salary floor, posted-date window | The pipeline runs with the default keyword set checked into this repo (Solutions Architect/Presales/Integration-flavored) — edit this file to target your own field before your first real run |
+| **`seed_filters.yaml`** | Every filter criterion below | The pipeline runs with the default keyword set checked into this repo (Solutions Architect/Presales/Integration-flavored) — edit this file to target your own field before your first real run |
 | **`seed_companies.yaml`** | Specific companies to poll directly via Greenhouse/Lever/Ashby/SmartRecruiters, so you catch every one of their openings the moment it's posted | **Nothing breaks if this is empty.** Adzuna's broad keyword search (driven entirely by `seed_filters.yaml`) runs regardless and is often the majority of what you'll see — direct company tracking is a bonus layer on top, not a requirement. Add companies anytime later, including live via the `SEED`-row-on-the-Sheet trick (see Key Features) |
 
 Both are live-editable after setup too — the next scheduled run just picks up whatever's currently in the DB (`seed_filters.yaml`/`seed_companies.yaml` are only read at the moment you run `seed-filters`/`seed-companies`; ongoing changes happen by re-running those commands or editing the DB tables directly).
+
+**Every filter criterion `seed_filters.yaml` actually supports today:**
+
+| Criterion | What it does |
+|---|---|
+| `role_keyword_include` | Job-title keywords you're targeting (e.g. "Solutions Architect") |
+| `tech_keyword_include` | Skill/domain keywords (e.g. "Kafka", "iPaaS") — either list matching is enough to pass |
+| `title_exclude` | Title-only blocklist (e.g. "Intern", "Director") |
+| `seniority` | Only these seniority levels (e.g. `mid`, `senior`, `staff`) |
+| `remote_type` | Only these work-location types (e.g. `remote`, `hybrid`) |
+| `location_include` | Only postings whose location text matches one of these |
+| `industries_include` | **Only certain industries** — a real hard filter, empty by default so it's a no-op until you populate it |
+| `posted_within_days` | Drop anything older than this many days |
+| `company_priority_min` | Only companies at or above this priority tier (`S`/`A`/`B`/`C`) |
+| `employee_count_min` / `employee_count_max` | **Only companies with a headcount in this range** |
+| `founded_after_year` | Only companies founded after this year (a rough startup-recency proxy) |
+| `require_us_location` | Drop anything that doesn't look US-based |
+| `require_visa_sponsorship` | Evict postings the Visa Scanner classifies `restricted` |
+| `require_h1b_track_record` | Only companies with a confirmed historical H-1B track record (depends on the not-yet-built historical-data feature on the [Roadmap](#️-roadmap)) |
+
+**Not supported yet, genuinely missing today**: filtering by salary range, and filtering by funding stage/company type (a real "startups only" filter, as opposed to the founded-year/headcount proxies above). Both are now on the [Roadmap](#️-roadmap).
 
 ### Resource requirements & platform support
 
@@ -376,6 +397,9 @@ Because you already know how to use it, it's free, it's already got notification
 - Batch Google Sheets writes (`append_rows` + in-memory duplicate-check) instead of one API call per job — the current per-job cost is what makes a large backlog slow
 - Automatic re-validation of jobs already on the sheet against later filter-criteria changes (today, only newly-ingested jobs are checked against the *current* rules)
 - Resume/cover-letter generation handoff to Claude Desktop on Approve (designed, not yet built)
+- **Salary-range filtering** — salary is extracted and shown today, but nothing actually filters on it yet
+- **A real "startups only" filter** — `founded_after_year` and `employee_count_max` are rough proxies today; `companies.funding_stage`/`company_type` are already enriched (`series_a`, `private`, etc.) but never wired into filtering at all
+- **`location_include` should filter on the clean `location_state` field, not raw location text** — a real, slightly ironic gap: `location_state` exists specifically to resolve messy location strings, but the filter itself was never updated to use it, so it still does a raw substring match against inconsistent source text
 - **Real historical H-1B sponsorship data**, not just posting-text classification. Today's visa-fit check only reads what one specific posting says; it says nothing about a company's actual track record. The **USCIS H-1B Employer Data Hub** (official, free, no API key) publishes exactly that: employer name plus petitions approved/denied by fiscal year, "last sponsored in year X" and all. The DB schema already has unused columns waiting for this (`companies.h1b_sponsor_last_5yrs`, `h1b_petitions_last_5yrs`, `h1b_data_last_checked`). The real work isn't fetching the data, it's matching messy real-world company names against USCIS's employer names reliably (this project already hit the identical problem matching company names against a different data source — see `RUNBOOK.md`'s FMP name-collision entries)
 - **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
 - **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column

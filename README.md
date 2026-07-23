@@ -145,6 +145,33 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 
 ---
 
+## ⏱️ Time Saved — The Jobs You Never Had to Read
+
+Real funnel numbers from this project's own history, out of every posting it has ever seen:
+
+| Stage | Jobs |
+|---|---|
+| Total postings ingested | **137,318** |
+| Automatically deduplicated (same posting seen across multiple sources) | 110,851 |
+| Filtered out before ever reaching you at all (wrong title, location, seniority) | 17,042 |
+| Removed after the posting closed or expired | 6,683 |
+| **Looked like a real match on title and keywords, then automatically caught and removed for visa-sponsorship restrictions** | **577** |
+| **Actually reached your Sheet, worth spending your time on** | **3,355** |
+
+Out of 137,318 postings, only about 2.4% ever needed a minute of your attention. Everything else was resolved automatically, including 577 postings that would have looked like a genuine fit, cost you real time reading and maybe even applying, before you ever discovered the actual dead end: no visa sponsorship.
+
+**What that language actually looks like** — real phrasing this project has caught in live job postings, usually buried a few paragraphs in, not in the title:
+
+> *"We are unable to sponsor H-1B, F-1 OPT, and STEM OPT extension at this time."*
+> *"This role is not open to visa sponsorship."*
+> *"Visa sponsorship is not available for this position."*
+> *"...without requiring a visa transfer or visa sponsorship."*
+> *"This position requires a government security clearance; you must be a US citizen for consideration."*
+
+Every one of these reads like ordinary EEO/legal boilerplate at a glance, easy to skim past, easy to miss until you're already deep into an application. That's the exact text Beacon's classifier is built to catch.
+
+---
+
 ## 💰 Cost Model — AI Only When It's Actually Needed
 
 > **This software itself is free and open source (MIT license) — there's no fee, subscription, or payment to download or run it.** The $8.88 below is *not* a price. It's the real, total AI usage cost from one person's own account, accumulated over several weeks of actual daily use, paid directly to Anthropic (not to this project) at their standard pay-as-you-go API rates. You bring your own API key and only ever pay the provider for what you personally use — for most people running this at a similar scale, that's cents to a few dollars over a real job search, not a fixed cost anyone charges you.

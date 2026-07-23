@@ -158,11 +158,11 @@ Real numbers from this project's own live history, not an estimate:
 | Jobs classified `sponsors` — a confirmed positive signal | **103** |
 | **Total cumulative LLM spend, across every visa classification and every fit-score ever run** | **$8.88** |
 
-That's not "$8.88 to process a small sample" — that's the *entire lifetime spend* of a pipeline that's ingested well over 100,000 postings. The reason it stays this cheap:
+That's not the cost of a small test run — that's everything this project has ever spent, over its entire lifetime, after processing more than 100,000 job postings. Here's why it stays this cheap:
 
-1. **Company enrichment never touches an LLM at all.** Two free APIs only; if neither has a field, it just stays blank. The earlier design (Sonnet + web search as a fallback) was removed entirely once it became clear it was costing $0.15–0.75 *per company* — by far the most expensive thing in the whole pipeline for the least differentiated value.
-2. **Fit-scoring is opt-in per job**, not run against the backlog automatically — you flag a posting `Go Score` on the Sheet, and only then does a Sonnet call happen.
-3. **Visa classification's free keyword pre-check** resolves the large majority of postings (anything that never mentions `visa`/`sponsor`/`citizen`/`h1b`/etc. at all) with zero LLM involvement, and a regex pass catches most of what's left. Haiku only ever sees the genuinely ambiguous remainder — and at Haiku's pricing, even that remainder costs fractions of a cent per job.
+1. **Looking up company details (size, funding, HQ) never uses AI.** It only checks two free data sources. If neither one has the answer, the field is just left blank instead of guessing. We used to fall back to AI when both came up empty — that alone cost $0.15–0.75 per company, more expensive than everything else in the whole pipeline combined, for the part that mattered least.
+2. **Scoring how well a job matches your resume only happens when you ask for it.** You flag one specific job on the Sheet, and only then does the AI look at it. It never runs on your whole job list automatically.
+3. **Checking for visa sponsorship is mostly free too.** Most job postings don't mention visas at all, so those get skipped for free. Simple text-matching (no AI) catches most of what's left. AI only steps in for the small number of postings where the wording is genuinely unclear — and even then, it costs a tiny fraction of a cent per job.
 
 ---
 
@@ -203,6 +203,25 @@ cp seed_companies.example.yaml seed_companies.yaml      # start your own target-
 python -m app.cli seed-companies --file seed_companies.yaml
 python -m app.cli pipeline                              # one manual end-to-end run
 ```
+
+**Two files decide what you actually see — edit these, not the code:**
+
+| File | What it controls | If you skip it |
+|---|---|---|
+| **`seed_filters.yaml`** | Your job-title keywords (`role_keyword_include`), skill/tech keywords (`tech_keyword_include`), title exclusions, seniority, location, salary floor, posted-date window | The pipeline runs with the default keyword set checked into this repo (Solutions Architect/Presales/Integration-flavored) — edit this file to target your own field before your first real run |
+| **`seed_companies.yaml`** | Specific companies to poll directly via Greenhouse/Lever/Ashby/SmartRecruiters, so you catch every one of their openings the moment it's posted | **Nothing breaks if this is empty.** Adzuna's broad keyword search (driven entirely by `seed_filters.yaml`) runs regardless and is often the majority of what you'll see — direct company tracking is a bonus layer on top, not a requirement. Add companies anytime later, including live via the `SEED`-row-on-the-Sheet trick (see Key Features) |
+
+Both are live-editable after setup too — the next scheduled run just picks up whatever's currently in the DB (`seed_filters.yaml`/`seed_companies.yaml` are only read at the moment you run `seed-filters`/`seed-companies`; ongoing changes happen by re-running those commands or editing the DB tables directly).
+
+### Resource requirements & platform support
+
+| | |
+|---|---|
+| **Download/install time** | The repo itself is ~8MB (seconds to clone). `pip install -r requirements.txt` installs 10 lightweight dependencies — no ML/data-science stack — typically under a minute on a normal connection |
+| **Disk space** | Starts near-empty; grows with how much you ingest. This project's own database reached ~490MB after several weeks of continuous 3x/day polling against 150+ tracked companies plus broad discovery — budget a few hundred MB to a couple GB for long-term personal use |
+| **Memory** | The scheduler process itself runs at roughly **20-30MB RAM** in practice (measured on this project's live process) — it's I/O-bound (waiting on API calls), not compute-heavy |
+| **CPU** | Negligible — brief bursts during each poll, idle the rest of the time |
+| **Platform** | **Every CLI command (`migrate`, `ingest`, `filter`, `pipeline`, etc.) is plain cross-platform Python and runs fine on Windows, macOS, or Linux.** The one exception: `app/scheduler.py` (the persistent "run continuously" process) currently uses a Windows-only file lock (`msvcrt`) to guarantee only one instance runs at a time — on macOS/Linux you'd need to either run pipeline commands manually/via cron, or swap that lock for a `fcntl`-based one (a small, contained change) before running the scheduler unattended |
 
 ### Running continuously
 

@@ -61,6 +61,8 @@ Fair question — here's the honest comparison, not a sales pitch. LinkedIn Prem
 1. **Visa fit** — does this posting's own text rule you out on sponsorship? Only asked when free keyword/regex checks genuinely can't tell.
 2. **Job fit** — does this posting match your resume well enough to be worth pursuing? Only asked when *you* type `Go Score` (short for "go score job fit") into that specific row's **My Decision** cell.
 
+**Important scope note on visa fit**: this only ever reads the text of that one specific job posting, title, location, and description. It does **not** look up a company's real historical sponsorship record anywhere (DOL LCA filings, USCIS's H-1B employer data hub, etc.), and it doesn't go out to the internet to check anything beyond fetching that posting's own page. "Sponsored" here means "this posting's own words say they'll sponsor," not "this company has a track record of sponsoring." Those are genuinely different signals; real historical H-1B data as a second signal is on the [Roadmap](#️-roadmap), not built yet.
+
 Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved.
 
 > **One word, "Go Score", is the only thing in this entire pipeline that ever spends an AI token on your behalf. Everything else, including visa screening, either runs on free pattern matching or doesn't run at all until you ask.**

@@ -248,6 +248,8 @@ That's not the cost of a small test run — that's everything this project has e
 - A free [Financial Modeling Prep](https://financialmodelingprep.com) key and [StartupHub.ai](https://startuphub.ai) key
 - A Google Cloud **service account** (not OAuth) shared as an Editor on two Google Sheets you create yourself — one for active matches ("Beacon"), one for excluded jobs ("Job Log")
 
+Don't have these yet? See the [Appendix](#-appendix-getting-each-api-key) for step-by-step instructions for every single one.
+
 ### Installation
 
 ```bash
@@ -426,6 +428,46 @@ Because you already know how to use it, it's free, it's already got notification
 ## 🤖 Built With
 
 This entire pipeline — architecture, every source integration, the visa classification design, the Sheets automation, the test suite, and every bug fix along the way — was built through an extended pair-programming process with **[Claude Code](https://claude.com/claude-code)**, Anthropic's agentic CLI. The full build narrative, including real bugs found and fixed live against production data, is documented in [`RUNBOOK.md`](./RUNBOOK.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+
+---
+
+## 📎 Appendix: Getting Each API Key
+
+Step-by-step for every credential `.env.example` asks for. No screenshots (UIs change and go stale; these steps don't).
+
+### Anthropic API key (`ANTHROPIC_API_KEY`)
+1. Go to [console.anthropic.com](https://console.anthropic.com) and sign up or log in
+2. Go to **Settings → API Keys**
+3. Click **Create Key**, give it a name, and copy the value (starts with `sk-ant-`) — you only get to see it once
+4. Add billing/credits if you haven't already (Settings → Billing) — new accounts usually start with some free credit, but visa-scan and fit-scoring need an active balance to keep running past that
+5. Paste the key into `.env` as `ANTHROPIC_API_KEY`
+
+### Adzuna (`ADZUNA_APP_ID` / `ADZUNA_APP_KEY`)
+1. Go to [developer.adzuna.com](https://developer.adzuna.com) and register for a free account
+2. Once verified, your dashboard shows your **App ID** and **App Key** directly, no extra steps
+3. Copy both into `.env`
+
+### Google Sheets service account (`GOOGLE_SHEETS_CREDENTIALS_PATH`, `GOOGLE_SHEET_ID`, `GOOGLE_JOB_LOG_SHEET_ID`)
+This is the most involved one, but it's a one-time setup:
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project (or reuse an existing one)
+2. **APIs & Services → Library** — search for "Google Sheets API" and click **Enable**
+3. **APIs & Services → Credentials → Create Credentials → Service Account** — give it any name, no special roles needed for this
+4. Open the new service account → **Keys** tab → **Add Key → Create New Key → JSON** — this downloads a `.json` file
+5. Save that file into the project (e.g. as `service_account.json`) and point `GOOGLE_SHEETS_CREDENTIALS_PATH` at it
+6. Open the downloaded JSON and find the `client_email` field — it looks like `something@your-project.iam.gserviceaccount.com`
+7. Create two blank Google Sheets in your own Google account: one for active matches ("Beacon"), one for excluded jobs ("Job Log")
+8. **Share each Sheet** with that `client_email` address, giving it **Editor** access, exactly like sharing with a person — this is the step people most often miss, and without it every write will fail with a permissions error
+9. Copy each Sheet's ID from its URL (the long string between `/d/` and `/edit`) into `.env` as `GOOGLE_SHEET_ID` and `GOOGLE_JOB_LOG_SHEET_ID`
+
+### Financial Modeling Prep (`FMP_API_KEY`)
+1. Go to [financialmodelingprep.com](https://financialmodelingprep.com) and sign up for a free account
+2. Your API key is shown directly on your dashboard
+3. Copy it into `.env`
+
+### StartupHub.ai (`STARTUPHUB_API_KEY`)
+1. Go to [startuphub.ai](https://startuphub.ai) and sign up for a free account
+2. Get your API key from your account dashboard
+3. Copy it into `.env`
 
 ---
 

@@ -91,59 +91,16 @@ Stays cheap because: company lookups only use free data sources (left blank if n
 
 ---
 
-### AI touches exactly two decisions in this entire pipeline
+## 🧠 How AI Fits In
 
-1. **Visa fit** — does *this posting's own text* rule out sponsorship? Only asked when free keyword/regex checks can't tell. (Posting text only, not company history — see the next section for that.)
-2. **Job fit** — does this posting match your resume? Only asked when you type `Go Score` into that row's **My Decision** cell.
+AI makes exactly two decisions here. Everything else is free, deterministic code:
 
-### Real historical sponsorship data (DOL LCA)
+1. **Does this job sponsor visas?** Checked automatically on every posting — free pattern-matching first, AI only for the genuinely unclear remainder.
+2. **Does this job match your resume?** Only checked when you type `Go Score` into that row's **My Decision** cell — never automatic, never your whole backlog.
 
-A second, separate signal: real DOL government filing data on which companies have actually sponsored before — not another guess from posting text. A match means **"Likely work visa sponsor,"** a positive historical signal, not a guarantee for any specific posting.
+There's also a separate, real signal: **DOL government filing data** on which companies have sponsored before — a "Likely work visa sponsor" flag, not a guarantee. Run it with `python -m app.cli lca-enrich <path>`; it works alongside the checks above, not instead of them.
 
-Manual by design (DOL blocks automated downloads): grab the quarterly `.xlsx` from the [OFLC Performance Data page](https://www.dol.gov/agencies/eta/foreign-labor/performance), then run `python -m app.cli lca-enrich <path>`. Runs alongside the Visa Flag check above, not instead of it — doesn't reduce its AI usage.
-
-*(Full details — file format, matching logic, multi-year merging, real test numbers — in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md).)*
-
-Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved.
-
-Here's exactly how each of those two decisions gets made:
-
-### How the keyword + AI pipeline actually works
-
-```
-Every posting →  keyword match (role/tech titles)  →  does it even mention "visa"/"sponsor"/"h1b"/etc?
-                          │                                          │
-                    no match → discarded,                    no  → "No mention", $0, done
-                    zero cost, zero AI                         │
-                                                                yes → regex-confident phrase?
-                                                                          │            │
-                                                                    yes, $0      no → Haiku classifies
-                                                                    done         (only the genuinely
-                                                                                  ambiguous remainder)
-```
-
-Three tiers, cheapest first — a real posting only ever reaches an LLM if a human would also have to actually read the sentence carefully to decide. Everything upstream of that (does this even look like a role I want, does it even mention sponsorship at all) is free, deterministic Python.
-
-**What Haiku actually sees and returns, for that last genuinely ambiguous tier:**
-- **Input**: the job's title, its location, and up to 12,000 characters of the description (not just a short prefix — sponsorship language is legal/EEO boilerplate that's frequently near the *end* of a posting, and an earlier, shorter truncation really did cut off the deciding sentence in testing)
-- **Task**: classify sponsorship specifically for *this posting's own location*, not sponsorship in general. A posting that says "we can sponsor visas to Germany" on a US-based role gets classified `restricted` for the US, not `sponsors`, even though the word "sponsor" appears in a positive sentence right there in the text
-- **Output**: a forced-structure JSON response, exactly `{"visa_flag": "restricted" | "sponsors" | "unclear", "snippet": "..."}` — never free-form text, and the snippet is a direct quote from the actual posting, not a paraphrase, so you can always see exactly which sentence drove the call
-- That result gets written straight to the job's row and, if it comes back `restricted`, the posting is automatically evicted from your Sheet before you ever see it as a live match
-
-### You put AI on command, one job at a time
-
-The resume-fit scoring step (Claude Sonnet) never runs on its own. It's controlled entirely by a single Sheet column, **My Decision**, which is just a dropdown on each row. `Go Score` here means specifically "go score *job fit*" against your resume — it has nothing to do with visa fit, which is checked automatically and never needs a manual trigger:
-
-| Value | Who sets it | What happens |
-|---|---|---|
-| `New` | App, by default | Nothing. This is every job's starting state — no AI has looked at it |
-| `Go Score` (i.e. "go score job fit") | **You** | You're telling the pipeline "spend an AI call scoring this one against my resume." This is the only manual AI trigger anywhere in the pipeline — nothing happens to any other row |
-| `AI Score Pending` | App | Claimed right before the Sonnet call, so a failure retries automatically instead of getting stuck or silently skipped |
-| `AI Scored` | App | Done — the score is now on the row |
-| `Manual Scored` | You | Your own judgment call, no AI involved at all |
-| `Reject` | You | Removes the row, no AI involved |
-
-There's no "score everything" button and no background job silently scoring your whole backlog — just this one dropdown, row by row.
+*(Full mechanics — the pipeline diagram, exactly what the AI sees, every My Decision state — in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).)*
 
 ---
 
@@ -341,7 +298,7 @@ beacon/
 ## ❓ FAQ
 
 **Can you get me a job, or tell me which companies sponsor visas?**
-> No. See the [Disclaimer](#️-disclaimer) below — there's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca)) — that's a positive historical indicator, not a guarantee about any specific role.
+> No. See the [Disclaimer](#️-disclaimer) below — there's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [How AI Fits In](#-how-ai-fits-in)) — that's a positive historical indicator, not a guarantee about any specific role.
 
 **Can I use more than one resume?**
 > Not yet — a real, known limitation. Fit-scoring always reads a single file (`resumes/base_resume.md`, falling back to `.txt` then `.docx`, first match wins), with no way to select a different one per job or per role type. If you want to score against different resumes for different kinds of roles, today's only workaround is manually swapping the file between runs.
@@ -443,7 +400,7 @@ A third, best-effort `industry` source, only queried for companies FMP and Start
 3. Skip this entirely if you don't want it — `enrich-companies` runs fine without it, it just won't attempt this third pass
 
 ### DOL LCA disclosure data (no signup, no API key — manual download)
-This is the source behind the `DOL LCA Match`/`Last Sponsored` columns (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca) above for what those fields mean and, just as important, what they *don't* guarantee). Unlike everything else in this Appendix, there's no account and no key — it's public U.S. Department of Labor data — but it does need a bit more manual care to keep current.
+This is the source behind the `DOL LCA Match`/`Last Sponsored` columns (see [How AI Fits In](#-how-ai-fits-in) above for what those fields mean and, just as important, what they *don't* guarantee). Unlike everything else in this Appendix, there's no account and no key — it's public U.S. Department of Labor data — but it does need a bit more manual care to keep current.
 
 **Prerequisites**
 - Just a regular web browser. No signup, no key, no cost — this is public government data
@@ -483,7 +440,7 @@ MIT — see [LICENSE](./LICENSE).
 > 1. **Not legal or immigration advice.** I'm not a recruiter, employer, or immigration attorney, and nothing here guarantees any company will actually sponsor you.
 > 2. **The "Likely work visa sponsor" signal is not a promise.** It's a positive historical indicator from public government filing data — a company can have a strong filing history and still not sponsor for a specific role.
 
-Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, and doesn't maintain any personally curated list of "companies that sponsor visas" — there is no such list. The one exception is the [DOL LCA match](#real-historical-sponsorship-data-dol-lca), which is real public government filing data, not a curated opinion — and even that is a "likely sponsors" positive indicator, never a guarantee, since a company's past filing says nothing about whether this specific posting will sponsor. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
+Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, and doesn't maintain any personally curated list of "companies that sponsor visas" — there is no such list. The one exception is the [DOL LCA match](#-how-ai-fits-in), which is real public government filing data, not a curated opinion — and even that is a "likely sponsors" positive indicator, never a guarantee, since a company's past filing says nothing about whether this specific posting will sponsor. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
 
 ---
 

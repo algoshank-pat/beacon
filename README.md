@@ -32,7 +32,7 @@
 
 **If this saves you time, a ⭐ helps other visa holders find it too.**
 
-### Who this is for
+## 🎯 Who this is for, and why
 
 - H-1B holders, F-1 OPT/STEM-OPT students, and anyone else whose job search has to filter for visa sponsorship
 - Anyone tired of discovering a sponsorship dead-end three paragraphs into a job description, after already spending time on it
@@ -41,26 +41,9 @@
 - Anyone who'd rather track their job search in their own private Google Sheet than log into yet another dashboard
 - Builders curious what a real, production Claude Code build looks like end-to-end, bugs and all (see [`RUNBOOK.md`](./RUNBOOK.md))
 
----
-
-## 🎯 The Goal
-
 **Every work visa holder should be able to find jobs suitable for them, and apply to companies that actually sponsor work visas, with real information about who has sponsored before.** That's the point: less headache, less wasted time, more of your search actually going toward employers who'll consider you.
 
-And this has to stay free for anyone to adopt without a second thought. It's already low cost today, under $1/month for typical personal use (see [Savings](#-savings--time--cost) for the real numbers) — but "low cost" still means worrying about a bill. The real goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all: **$0**, permanently, so nobody has to think about AI spend to run their own job search.
-
----
-
-## Why this exists
-
-If you're job-hunting on a visa (H-1B, OPT/STEM-OPT, or otherwise), you already know the real cost isn't finding job postings — it's the hours lost reading through postings that were never going to sponsor you in the first place, often three paragraphs deep in EEO boilerplate that never even mentions "visa" until the very last sentence.
-
-Beacon was built to remove that specific waste, for close to $0:
-
-- **Never manually re-check "do they sponsor?" again.** Every posting's own text is automatically screened for sponsorship language and labeled `Sponsored` / `No sponsor` / `No mention` / `Unclear` before you ever open it.
-- **You define what "relevant" means, not a hardcoded list.** The role/tech keyword lists that decide what gets surfaced at all are stored in a database table, not buried in code — retarget it for your own field in the Sheet or the DB, no redeploy needed.
-- **AI is the last resort, not the first.** See [Savings](#-savings--time--cost) below — the real numbers, not a guess.
-- **Runs unattended, three times a day**, and lands everything in a Google Sheet — no new app to learn, no dashboard to check obsessively.
+This has to stay free for anyone to adopt without a second thought. It's already low cost today, under $1/month for typical personal use (see [Savings](#-savings--time--cost) for the real numbers) — the real goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all: **$0**, permanently.
 
 ## 💸 Why not just pay for LinkedIn Premium?
 
@@ -400,7 +383,7 @@ beacon/
 - Automate the quarterly LCA re-check on a schedule once there's a reliable way past DOL's bot protection (today it's a manual download + `python -m app.cli lca-enrich`, by design — see the Real Historical Sponsorship Data section above)
 - **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
 - **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column
-- **Adding other AI backends for visa and fit scoring, alongside Claude** — specifically open-weight models run locally on your own laptop (e.g. via Ollama), not just another paid API. This is the concrete path toward [the Goal](#-the-goal) of $0 ongoing cost: today's design already keeps Claude usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude's reliability on the same task first
+- **Adding other AI backends for visa and fit scoring, alongside Claude** — specifically open-weight models run locally on your own laptop (e.g. via Ollama), not just another paid API. This is the concrete path toward [the Goal](#-who-this-is-for-and-why) of $0 ongoing cost: today's design already keeps Claude usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude's reliability on the same task first
 
 ---
 

@@ -267,9 +267,17 @@ python -m app.cli pipeline                              # one manual end-to-end 
 | File | What it controls | If you skip it |
 |---|---|---|
 | **`seed_filters.yaml`** | Every filter criterion below | The pipeline runs with the default keyword set checked into this repo (Solutions Architect/Presales/Integration-flavored) — edit this file to target your own field before your first real run |
-| **`seed_companies.yaml`** | Specific companies to poll directly via Greenhouse/Lever/Ashby/SmartRecruiters, so you catch every one of their openings the moment it's posted | **Nothing breaks if this is empty.** Adzuna's broad keyword search (driven entirely by `seed_filters.yaml`) runs regardless and is often the majority of what you'll see — direct company tracking is a bonus layer on top, not a requirement. Add companies anytime later, including live via the `SEED`-row-on-the-Sheet trick (see Key Features) |
+| **`seed_companies.yaml`** | Specific companies to poll directly via Greenhouse/Lever/Ashby/SmartRecruiters, so you catch every one of their openings the moment it's posted | **Nothing breaks if this is empty.** Adzuna's broad keyword search (driven entirely by `seed_filters.yaml`) runs regardless and is often the majority of what you'll see — direct company tracking is a bonus layer on top, not a requirement. Add companies anytime later, including live via the `SEED`-row-on-the-Sheet trick (see below) |
 
 Both are live-editable after setup too — the next scheduled run just picks up whatever's currently in the DB (`seed_filters.yaml`/`seed_companies.yaml` are only read at the moment you run `seed-filters`/`seed-companies`; ongoing changes happen by re-running those commands or editing the DB tables directly).
+
+### Adding a company later, straight from the Sheet — no file editing
+
+1. On the Beacon sheet, add a new row
+2. Set that row's **Job ID** to `SEED` and **Company** to the name you want tracked — leave every other column blank
+3. Wait for the next scheduled run, or trigger it yourself right away: `python -m app.cli seed-via-sheet`
+4. It guesses and verifies a real job-board slug across Greenhouse, Lever, Ashby, and SmartRecruiters, and writes the outcome into that row's **Title** cell — on success, the company is added and its real postings often start flowing in on that same run; on failure, the Title cell explains why
+5. Either way, the `SEED` row itself is deleted automatically on the run after that — it was never a real posting, just a one-time onboarding request
 
 **Every filter criterion `seed_filters.yaml` actually supports today:**
 

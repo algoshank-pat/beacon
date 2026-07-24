@@ -162,45 +162,24 @@ Don't have these yet? See the [Appendix](#-appendix-getting-each-api-key) for st
 ```bash
 git clone https://github.com/algoshank-pat/beacon.git
 cd beacon
-
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
-pip install -r requirements.txt
-
-cp .env.example .env
-# Open .env and fill in your own API keys and Sheet IDs
-# Place your Google service-account JSON key at the path GOOGLE_SHEETS_CREDENTIALS_PATH points to
-
-# Place your resume where fit-scoring looks for it (first match wins):
-#   resumes/base_resume.docx
-#   resumes/base_resume.md
-#   resumes/base_resume.txt
+python bootstrap.py
 ```
 
-**Fit-scoring needs your resume on disk to work at all.** Without a file at one of those three paths, typing `Go Score` on a job will fail with a clear "no base resume found" error rather than silently doing nothing. This file is gitignored and never leaves your machine, same as everything else in `resumes/`.
+`bootstrap.py` creates the venv, installs dependencies, copies `.env` and `seed_companies.yaml` from their templates, and runs the database migrations and default filter setup — everything that doesn't need your own credentials yet.
 
-### First run
+### Finish setup
 
-```bash
-python -m app.cli migrate                              # create the DB schema
-python -m app.cli seed-filters --file seed_filters.yaml # load default filter criteria
-cp seed_companies.example.yaml seed_companies.yaml      # start your own target-company list
-python -m app.cli seed-companies --file seed_companies.yaml
-python -m app.cli pipeline                              # one manual end-to-end run
-```
+The rest genuinely needs your own accounts, so no script can do it for you:
 
-**Two files decide what you actually see — edit these, not the code:**
+1. Activate the venv: `.venv\Scripts\activate` (Windows) or `source .venv/bin/activate` (macOS/Linux)
+2. Fill in your API keys and Sheet IDs in `.env` — see the [Appendix](#-appendix-getting-each-api-key) for how to get each one
+3. Place your Google service-account JSON key at the path `GOOGLE_SHEETS_CREDENTIALS_PATH` points to
+4. Place your resume at `resumes/base_resume.docx` (or `.md`/`.txt`) — **fit-scoring needs this file to work at all**; without it, typing `Go Score` fails with a clear error instead of silently doing nothing
+5. Edit `seed_companies.yaml` — replace the example companies with your own targets, or leave it empty (nothing breaks; Adzuna's broad keyword search runs regardless and is often the majority of what you'll see — direct company tracking is a bonus layer on top, not a requirement)
+6. Run `python -m app.cli seed-companies --file seed_companies.yaml`
+7. Run `python -m app.cli pipeline` for one manual end-to-end run
 
-| File | What it controls | If you skip it |
-|---|---|---|
-| **`seed_filters.yaml`** | Every filter criterion below | The pipeline runs with the default keyword set checked into this repo (Solutions Architect/Presales/Integration-flavored) — edit this file to target your own field before your first real run |
-| **`seed_companies.yaml`** | Specific companies to poll directly via Greenhouse/Lever/Ashby/SmartRecruiters, so you catch every one of their openings the moment it's posted | **Nothing breaks if this is empty.** Adzuna's broad keyword search (driven entirely by `seed_filters.yaml`) runs regardless and is often the majority of what you'll see — direct company tracking is a bonus layer on top, not a requirement. Add companies anytime later, including live via the `SEED`-row-on-the-Sheet trick (see below) |
-
-Both are live-editable after setup too — the next scheduled run just picks up whatever's currently in the DB (`seed_filters.yaml`/`seed_companies.yaml` are only read at the moment you run `seed-filters`/`seed-companies`; ongoing changes happen by re-running those commands or editing the DB tables directly).
+`seed_filters.yaml` (already loaded by `bootstrap.py`) and `seed_companies.yaml` are both live-editable after setup too — re-run `seed-filters`/`seed-companies` or edit the DB tables directly, and the next scheduled run picks it up. You can also add a company anytime later straight from the Sheet — see below.
 
 ### Adding a company later, straight from the Sheet — no file editing
 
@@ -237,7 +216,7 @@ Both are live-editable after setup too — the next scheduled run just picks up 
 
 | | |
 |---|---|
-| **Download/install time** | The repo itself is ~8MB (seconds to clone). `pip install -r requirements.txt` installs 10 lightweight dependencies — no ML/data-science stack — typically under a minute on a normal connection |
+| **Download/install time** | The repo itself is ~8MB (seconds to clone). `bootstrap.py` installs 10 lightweight dependencies — no ML/data-science stack — typically under a minute on a normal connection |
 | **Disk space** | Starts near-empty; grows with how much you ingest. This project's own database reached ~490MB after several weeks of continuous 3x/day polling against 150+ tracked companies plus broad discovery — budget a few hundred MB to a couple GB for long-term personal use |
 | **Memory** | The scheduler process itself runs at roughly **20-30MB RAM** in practice (measured on this project's live process) — it's I/O-bound (waiting on API calls), not compute-heavy |
 | **CPU** | Negligible — brief bursts during each poll, idle the rest of the time |
@@ -277,6 +256,7 @@ beacon/
 ├── seed_companies.example.yaml # Safe template — copy to seed_companies.yaml
 ├── seed_filters.yaml            # Default filter keyword/threshold seed data
 ├── .env.example                  # Safe credential template
+├── bootstrap.py                   # One-shot venv/install/config-template setup
 └── RUNBOOK.md                     # Day-to-day operating guide
 ```
 

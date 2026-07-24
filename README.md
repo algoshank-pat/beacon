@@ -32,16 +32,9 @@
 
 ## 🎯 Who this is for, and why
 
-- H-1B holders, F-1 OPT/STEM-OPT students, and anyone else whose job search has to filter for visa sponsorship
-- Anyone tired of discovering a sponsorship dead-end three paragraphs into a job description, after already spending time on it
-- Job seekers in any keyword-matchable field, not just tech: the role/tech keyword lists are fully yours to redefine
-- Anyone who doesn't want to spend money on AI unnecessarily
-- Anyone who'd rather track their job search in their own private Google Sheet than log into yet another dashboard
-- Builders curious what a real, production Claude Code build looks like end-to-end, bugs and all (see [`RUNBOOK.md`](./RUNBOOK.md))
+For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay for AI you don't need, or want your search tracked in your own private Sheet.
 
-**Every work visa holder should be able to find jobs suitable for them, and apply to companies that actually sponsor work visas, with real information about who has sponsored before.** That's the point: less headache, less wasted time, more of your search actually going toward employers who'll consider you.
-
-This has to stay free for anyone to adopt without a second thought. It's already low cost today, under $1/month for typical personal use (see [Savings](#-time-and-cost-savings) for the real numbers). The real goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all: **$0**, permanently.
+**Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's low cost today (see [Savings](#-time-and-cost-savings)); free, permanently, is the goal.
 
 ## 💸 Why not just pay for LinkedIn Premium?
 

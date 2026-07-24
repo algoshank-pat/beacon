@@ -1,10 +1,10 @@
 # 🔭 Beacon — Job Search Automation for Work Visa Holders
 
 **In plain words:**
-- Beacon finds job postings for you, automatically.
-- It checks each one and flags whether that company will actually sponsor a work visa.
-- Everything shows up in a Google Sheet — no new app to learn.
-- It runs on your own computer. Nobody else ever sees your search.
+- Beacon finds job postings for you, automatically, based on your own keywords.
+- It checks each one and flags whether that company will actually sponsor a work visa (H-1B).
+- Everything shows up in a Google Sheet — practical, right on your phone, no new app to learn.
+- It runs entirely on your own computer. Private by design — nobody else ever sees your search.
 
 ## 📸 See it in action
 

@@ -41,12 +41,6 @@
 
 ---
 
-## ⚠️ Disclaimer
-
-**This is not legal or immigration advice, and I'm not a recruiter, employer, or immigration attorney.** Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, and doesn't maintain any personally curated list of "companies that sponsor visas" — there is no such list. The one exception is the [DOL LCA match](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification), which is real public government filing data, not a curated opinion — and even that is a "likely sponsors" positive indicator, never a guarantee, since a company's past filing says nothing about whether this specific posting will sponsor. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
-
----
-
 ## 🎯 The Goal
 
 **Every work visa holder should be able to find jobs suitable for them, and apply to companies that actually sponsor work visas, with real information about who has sponsored before.** That's the point: less headache, less wasted time, more of your search actually going toward employers who'll consider you.
@@ -403,7 +397,7 @@ beacon/
 ## ❓ FAQ
 
 **Can you get me a job, or tell me which companies sponsor visas?**
-> No. See the [Disclaimer](#️-disclaimer) above — there's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification)) — that's a positive historical indicator, not a guarantee about any specific role.
+> No. See the [Disclaimer](#️-disclaimer) below — there's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification)) — that's a positive historical indicator, not a guarantee about any specific role.
 
 **Can I use more than one resume?**
 > Not yet — a real, known limitation. Fit-scoring always reads a single file (`resumes/base_resume.md`, falling back to `.txt` then `.docx`, first match wins), with no way to select a different one per job or per role type. If you want to score against different resumes for different kinds of roles, today's only workaround is manually swapping the file between runs.
@@ -536,9 +530,13 @@ MIT — see [LICENSE](./LICENSE).
 
 ---
 
+## ⚠️ Disclaimer
+
 > [!CAUTION]
 > 1. **Not legal or immigration advice.** I'm not a recruiter, employer, or immigration attorney, and nothing here guarantees any company will actually sponsor you.
 > 2. **The "Likely work visa sponsor" signal is not a promise.** It's a positive historical indicator from public government filing data — a company can have a strong filing history and still not sponsor for a specific role.
+
+Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, and doesn't maintain any personally curated list of "companies that sponsor visas" — there is no such list. The one exception is the [DOL LCA match](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification), which is real public government filing data, not a curated opinion — and even that is a "likely sponsors" positive indicator, never a guarantee, since a company's past filing says nothing about whether this specific posting will sponsor. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
 
 ---
 

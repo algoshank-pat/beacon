@@ -56,6 +56,28 @@ def _extract_certifications(rows) -> dict[str, tuple[datetime | None, str, str]]
     return best
 
 
+def merge_lca_data(
+    *parsed: dict[str, tuple[datetime | None, str, str]],
+) -> dict[str, tuple[datetime | None, str, str]]:
+    """Combines the results of multiple `parse_lca_disclosure_file` calls
+    (e.g. this fiscal year's file plus one or more prior fiscal years'
+    final/annual files) into one lookup, keeping the most recent decision
+    date per employer across all of them.
+
+    Each DOL quarterly file is cumulative *within its own fiscal year* --
+    FY2026 Q2 already contains everything FY2026 Q1 does, so passing every
+    quarter of the same year is redundant, not additive. The genuinely new
+    coverage comes from adding a *different fiscal year's* file (typically
+    that year's Q4/final release, its most complete one)."""
+    merged: dict[str, tuple[datetime | None, str, str]] = {}
+    for data in parsed:
+        for norm, (decision_date, raw_name, status) in data.items():
+            existing = merged.get(norm)
+            if existing is None or (decision_date and (not existing[0] or decision_date > existing[0])):
+                merged[norm] = (decision_date, raw_name, status)
+    return merged
+
+
 def parse_lca_disclosure_file(path: str) -> dict[str, tuple[datetime | None, str, str]]:
     """Reads a real DOL OFLC LCA disclosure .xlsx file. Looks up columns by
     header name, not position -- DOL changed the record layout once already
@@ -97,7 +119,13 @@ def run_lca_enrichment(conn: sqlite3.Connection, parsed: dict[str, tuple], main_
     company's jobs currently on Beacon -- without this, a company matched
     after its job's Beacon row already exists would never show the new
     columns there (same gap app.enrichment._push_to_beacon exists to close
-    for FMP/StartupHub, reused here directly)."""
+    for FMP/StartupHub, reused here directly).
+
+    Never regresses a company's stored last_lca_certified_date -- if the
+    date already in the DB is more recent than this hit's date (e.g. an
+    older fiscal year's file was passed in a run that didn't also include
+    whatever newer file produced the currently-stored date), the existing
+    value is left untouched rather than being overwritten backward in time."""
     from app.sheets import update_company_columns
 
     companies = conn.execute("SELECT * FROM companies").fetchall()
@@ -107,6 +135,13 @@ def run_lca_enrichment(conn: sqlite3.Connection, parsed: dict[str, tuple], main_
         if hit is None:
             continue
         decision_date, raw_name, _status = hit
+
+        existing_date_str = company["last_lca_certified_date"]
+        if existing_date_str is not None:
+            existing_date = datetime.fromisoformat(existing_date_str)
+            if decision_date is None or existing_date > decision_date:
+                continue
+
         conn.execute(
             "UPDATE companies SET dol_lca_employer_name = ?, last_lca_certified_date = ? WHERE id = ?",
             (raw_name, decision_date.isoformat() if decision_date else None, company["id"]),

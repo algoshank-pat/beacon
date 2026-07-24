@@ -2,6 +2,7 @@ from datetime import datetime
 
 from app.lca_enrichment import (
     _extract_certifications,
+    merge_lca_data,
     parse_lca_disclosure_file,
     run_lca_enrichment,
 )
@@ -45,6 +46,33 @@ def test_extract_certifications_normalizes_name_for_the_key():
     assert "acme inc." in result
 
 
+def test_merge_lca_data_keeps_most_recent_decision_across_files():
+    fy2025 = _extract_certifications([("Certified", datetime(2025, 6, 1), "Acme Inc.")])
+    fy2026 = _extract_certifications([("Certified", datetime(2026, 3, 1), "ACME INC.")])
+
+    merged = merge_lca_data(fy2025, fy2026)
+
+    decision_date, raw_name, status = merged["acme inc."]
+    assert decision_date == datetime(2026, 3, 1)
+    assert raw_name == "ACME INC."
+    assert status == "Certified"
+
+
+def test_merge_lca_data_keeps_older_files_own_match_when_newer_file_lacks_it():
+    fy2025 = _extract_certifications([("Certified", datetime(2025, 6, 1), "Beta LLC")])
+    fy2026 = _extract_certifications([("Certified", datetime(2026, 3, 1), "Gamma Corp")])
+
+    merged = merge_lca_data(fy2025, fy2026)
+
+    assert merged["beta llc"][0] == datetime(2025, 6, 1)
+    assert merged["gamma corp"][0] == datetime(2026, 3, 1)
+
+
+def test_merge_lca_data_with_single_file_is_a_no_op():
+    single = _extract_certifications([("Certified", datetime(2026, 3, 1), "Acme Inc.")])
+    assert merge_lca_data(single) == single
+
+
 def test_run_lca_enrichment_updates_matching_companies(db_conn):
     db_conn.execute("INSERT INTO companies (name) VALUES ('Acme Inc.')")
     db_conn.execute("INSERT INTO companies (name) VALUES ('Totally Unrelated Co')")
@@ -61,6 +89,38 @@ def test_run_lca_enrichment_updates_matching_companies(db_conn):
     unrelated = db_conn.execute("SELECT * FROM companies WHERE name = 'Totally Unrelated Co'").fetchone()
     assert unrelated["dol_lca_employer_name"] is None
     assert unrelated["last_lca_certified_date"] is None
+
+
+def test_run_lca_enrichment_does_not_regress_a_newer_stored_date(db_conn):
+    db_conn.execute(
+        "INSERT INTO companies (name, dol_lca_employer_name, last_lca_certified_date) "
+        "VALUES ('Acme Inc.', 'ACME INC.', '2026-03-01T00:00:00')"
+    )
+    db_conn.commit()
+
+    older_hit = _extract_certifications([("Certified", datetime(2025, 1, 1), "Acme Inc.")])
+    result = run_lca_enrichment(db_conn, older_hit)
+
+    assert result == {"companies_checked": 1, "matched": 0}
+    row = db_conn.execute("SELECT * FROM companies WHERE name = 'Acme Inc.'").fetchone()
+    assert row["dol_lca_employer_name"] == "ACME INC."
+    assert row["last_lca_certified_date"] == "2026-03-01T00:00:00"
+
+
+def test_run_lca_enrichment_updates_when_new_date_is_more_recent(db_conn):
+    db_conn.execute(
+        "INSERT INTO companies (name, dol_lca_employer_name, last_lca_certified_date) "
+        "VALUES ('Acme Inc.', 'Acme Inc.', '2025-01-01T00:00:00')"
+    )
+    db_conn.commit()
+
+    newer_hit = _extract_certifications([("Certified", datetime(2026, 3, 1), "ACME INC.")])
+    result = run_lca_enrichment(db_conn, newer_hit)
+
+    assert result == {"companies_checked": 1, "matched": 1}
+    row = db_conn.execute("SELECT * FROM companies WHERE name = 'Acme Inc.'").fetchone()
+    assert row["dol_lca_employer_name"] == "ACME INC."
+    assert row["last_lca_certified_date"] == "2026-03-01T00:00:00"
 
 
 def test_run_lca_enrichment_pushes_match_to_existing_beacon_row(db_conn):

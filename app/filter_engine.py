@@ -183,11 +183,22 @@ def evaluate_job(
             f"remote_type '{job_remote}' not in {remote_filter}",
         )
 
-    location_filter = keywords.get("location_include", [])
-    if location_filter and job["location"] and not _contains_any(job["location"], location_filter):
+    # Matches the resolved, clean location_state field (a 2-letter state
+    # code or "Remote-USA" -- see app.location_state), not the raw location
+    # text -- location_state exists specifically to resolve messy source
+    # strings, so filtering should use it instead of re-doing a fragile
+    # substring match against the same inconsistent text it was built to
+    # clean up. Exact match, not substring -- state codes are precise
+    # discrete values, unlike free text. Permissive when location_state is
+    # blank (unresolved, e.g. an informal place name or non-US remote
+    # posting) -- same "missing signal isn't evidence of a mismatch" rule
+    # this module already applies to remote_type just above.
+    location_filter = [s.lower() for s in keywords.get("location_include", [])]
+    job_location_state = job["location_state"]
+    if location_filter and job_location_state and job_location_state.lower() not in location_filter:
         return FilterResult(
             False, "location", "Filtered Out - Location",
-            f"location '{job['location']}' does not match {location_filter}",
+            f"location_state '{job_location_state}' not in {location_filter}",
         )
 
     if settings.get("require_us_location") and not is_us_location(job["location"]):

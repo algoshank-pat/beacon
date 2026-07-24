@@ -37,6 +37,7 @@ class Settings:
     )
     fmp_api_key: str | None = field(default_factory=lambda: os.environ.get("FMP_API_KEY"))
     startuphub_api_key: str | None = field(default_factory=lambda: os.environ.get("STARTUPHUB_API_KEY"))
+    tinyfish_api_key: str | None = field(default_factory=lambda: os.environ.get("TINYFISH_API_KEY"))
 
 
 def get_settings() -> Settings:

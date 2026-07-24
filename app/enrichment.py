@@ -46,6 +46,16 @@ h1b_sponsor_last_5yrs/h1b_petitions_last_5yrs are NOT handled here: that's
 specifically public DOL LCA disclosure data, a distinct dataset from what a
 job posting's own text says (see app.visa_scan) -- a genuinely separate
 future feature, not an extension of this module.
+
+3. TinyFish Search API (`run_tinyfish_enrichment`) -- a THIRD pass, free
+   (no-credit web search), gated to run only against companies where
+   `industry` is STILL blank after both of the passes above have already
+   been checked. Unlike FMP/StartupHub this isn't a structured
+   company-profile lookup -- see app.tinyfish's module docstring for the
+   real name-collision risk this found live and the two safeguards
+   (multi-source agreement, an audit-trail source URL) built to mitigate
+   it. Independent "checked" tracker (`tinyfish_last_checked`), same
+   pattern as the other two.
 """
 from __future__ import annotations
 
@@ -56,6 +66,7 @@ from app.fmp import fetch_company_profile as fetch_fmp_profile
 from app.observability import log_step
 from app.sheets import update_company_columns
 from app.startuphub import fetch_company_profile as fetch_startuphub_profile
+from app.tinyfish import fetch_company_industry as fetch_tinyfish_industry
 
 
 def get_fmp_enriched_today_count(conn: sqlite3.Connection) -> int:
@@ -258,23 +269,119 @@ def run_fmp_enrichment(
     return {"evaluated": len(companies), "enriched_fmp": enriched, "no_match_fmp": no_match}
 
 
+def run_tinyfish_enrichment(
+    conn: sqlite3.Connection,
+    tinyfish_api_key: str | None = None,
+    limit: int | None = None,
+    workflow_run_id: int | None = None,
+    main_ws=None,
+) -> dict:
+    """Third, best-effort industry pass -- see app.tinyfish's module
+    docstring for the search-and-corroborate approach and the two
+    safeguards (multi-source agreement, an audit-trail source URL) built
+    into it after live testing found real name-collision risk.
+
+    Deliberately gated to companies that (a) have ALREADY been checked
+    against both FMP and StartupHub (financial_data_last_checked AND
+    startuphub_last_checked both NOT NULL) and (b) still have no industry
+    -- there's no reason to spend even a free TinyFish call on a company
+    the two structured sources haven't had a chance at yet. (c) still needs
+    at least one job currently on Beacon, same scoping as the other two
+    passes. Independent `tinyfish_last_checked` tracker, same pattern as
+    the other two -- a company with no corroborated match still gets
+    stamped so it isn't re-searched forever."""
+    if not tinyfish_api_key:
+        return {"evaluated": 0, "enriched_tinyfish": 0, "no_match_tinyfish": 0}
+
+    query = """
+        SELECT DISTINCT c.* FROM companies c
+        JOIN jobs j ON j.company_id = c.id
+        WHERE c.financial_data_last_checked IS NOT NULL
+          AND c.startuphub_last_checked IS NOT NULL
+          AND c.tinyfish_last_checked IS NULL
+          AND (c.industry IS NULL OR c.industry = '')
+          AND j.sheet_row_number IS NOT NULL
+    """
+    if limit is not None:
+        query += " LIMIT ?"
+        companies = conn.execute(query, (limit,)).fetchall()
+    else:
+        companies = conn.execute(query).fetchall()
+
+    enriched = no_match = 0
+    for company in companies:
+        try:
+            result = fetch_tinyfish_industry(company["name"], tinyfish_api_key)
+        except Exception as exc:  # network/API hiccup -- fall through
+            result = None
+            if workflow_run_id is not None:
+                log_step(
+                    conn, workflow_run_id=workflow_run_id, step_name="enrich_tinyfish",
+                    step_status="tinyfish_failed", detail=f"{company['name']}: {exc}",
+                )
+
+        conn.execute(
+            """
+            UPDATE companies SET
+                industry = COALESCE(?, industry),
+                industry_source_url = COALESCE(?, industry_source_url),
+                tinyfish_last_checked = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                (result or {}).get("industry"),
+                (result or {}).get("industry_source_url"),
+                company["id"],
+            ),
+        )
+        conn.commit()
+        try:
+            _push_to_beacon(conn, main_ws, company["id"])
+        except Exception as exc:  # a Sheets outage must not abort the whole backlog
+            if workflow_run_id is not None:
+                log_step(
+                    conn, workflow_run_id=workflow_run_id, step_name="enrich_tinyfish",
+                    step_status="beacon_push_failed", detail=f"{company['name']}: {exc}",
+                )
+        if result:
+            enriched += 1
+        else:
+            no_match += 1
+
+        if workflow_run_id is not None:
+            log_step(
+                conn, workflow_run_id=workflow_run_id, step_name="enrich_tinyfish",
+                step_status="ok_tinyfish" if result else "no_match",
+                detail=f"{company['name']}: {json.dumps(result) if result else 'no corroborated match -- left blank'}",
+            )
+
+    return {"evaluated": len(companies), "enriched_tinyfish": enriched, "no_match_tinyfish": no_match}
+
+
 def run_enrichment(
     conn: sqlite3.Connection,
     settings: dict,
     fmp_api_key: str | None = None,
     startuphub_api_key: str | None = None,
+    tinyfish_api_key: str | None = None,
     limit: int | None = None,
     workflow_run_id: int | None = None,
     main_ws=None,
 ) -> dict:
     """Manual/on-demand combined entry point (`enrich-companies` CLI) --
-    runs both passes back-to-back with the same `limit` applied
-    independently to each (None means uncapped for both, the CLI default).
-    The scheduler does NOT use this: it calls run_startuphub_enrichment and
+    runs all three passes back-to-back with the same `limit` applied
+    independently to each (None means uncapped for all three, the CLI
+    default). TinyFish runs last so it sees the same run's FMP/StartupHub
+    writes (both "checked" columns are gating conditions for it). The
+    scheduler does NOT use this: it calls run_startuphub_enrichment and
     run_fmp_enrichment directly with different limits (StartupHub uncapped,
     FMP capped at the day's remaining daily_enrichment_limit) -- see
-    app.pipeline.run_scheduled_enrichment. `settings` is kept as a parameter
-    for interface consistency with the other pipeline steps, though nothing
+    app.pipeline.run_scheduled_enrichment. TinyFish isn't wired into the
+    scheduler at all yet -- it's manual-only until it's been run against a
+    real batch and spot-checked, same caution this project applies to any
+    new name-matching source. `settings` is kept as a parameter for
+    interface consistency with the other pipeline steps, though nothing
     here currently reads a budget from it."""
     startuphub_result = run_startuphub_enrichment(
         conn, startuphub_api_key=startuphub_api_key, limit=limit,
@@ -284,11 +391,22 @@ def run_enrichment(
         conn, fmp_api_key=fmp_api_key, limit=limit,
         workflow_run_id=workflow_run_id, main_ws=main_ws,
     )
+    tinyfish_result = run_tinyfish_enrichment(
+        conn, tinyfish_api_key=tinyfish_api_key, limit=limit,
+        workflow_run_id=workflow_run_id, main_ws=main_ws,
+    )
 
     return {
-        "evaluated": startuphub_result["evaluated"] + fmp_result["evaluated"],
-        "enriched": startuphub_result["enriched_startuphub"] + fmp_result["enriched_fmp"],
+        "evaluated": startuphub_result["evaluated"] + fmp_result["evaluated"] + tinyfish_result["evaluated"],
+        "enriched": (
+            startuphub_result["enriched_startuphub"] + fmp_result["enriched_fmp"]
+            + tinyfish_result["enriched_tinyfish"]
+        ),
         "enriched_fmp": fmp_result["enriched_fmp"],
         "enriched_startuphub": startuphub_result["enriched_startuphub"],
-        "no_match": startuphub_result["no_match_startuphub"] + fmp_result["no_match_fmp"],
+        "enriched_tinyfish": tinyfish_result["enriched_tinyfish"],
+        "no_match": (
+            startuphub_result["no_match_startuphub"] + fmp_result["no_match_fmp"]
+            + tinyfish_result["no_match_tinyfish"]
+        ),
     }

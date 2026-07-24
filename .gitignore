@@ -14,3 +14,4 @@ scheduler.lock
 .claude/
 seed_companies.yaml
 scratchpad/
+lca_data/

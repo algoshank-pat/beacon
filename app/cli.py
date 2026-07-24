@@ -255,14 +255,16 @@ def fit_score_cmd(limit: int | None) -> None:
 @cli.command(name="enrich-companies")
 @click.option("--limit", type=int, default=None, help="Max number of companies to enrich this run.")
 def enrich_companies_cmd(limit: int | None) -> None:
-    """Research employee count/HQ/public-private/funding stage/revenue for
-    companies with active jobs that haven't been enriched yet. Always free
-    (FMP + StartupHub.ai only) -- fields neither covers stay blank rather
-    than falling back to an LLM call. Runs both sources' passes back-to-back
-    with `--limit` applied independently to each (see app.enrichment module
-    docstring for why they're two independent passes with two independent
-    "checked" trackers) -- the scheduled job instead runs StartupHub
-    uncapped and only caps FMP, since FMP is the one with a real quota."""
+    """Research employee count/HQ/public-private/funding stage/revenue/
+    industry for companies with active jobs that haven't been enriched yet.
+    Always free (FMP + StartupHub.ai, plus TinyFish Search as a third,
+    industry-only pass if TINYFISH_API_KEY is set) -- fields none of them
+    cover stay blank rather than falling back to a paid LLM call. Runs all
+    three passes back-to-back with `--limit` applied independently to each
+    (see app.enrichment module docstring for why they're independent passes
+    with independent "checked" trackers) -- the scheduled job instead runs
+    StartupHub uncapped and only caps FMP, since FMP is the one with a real
+    quota, and doesn't run TinyFish at all yet (manual-only for now)."""
     settings = get_settings()
     conn = get_connection()
     try:
@@ -272,6 +274,7 @@ def enrich_companies_cmd(limit: int | None) -> None:
         result = run_enrichment(
             conn, filter_settings,
             fmp_api_key=settings.fmp_api_key, startuphub_api_key=settings.startuphub_api_key,
+            tinyfish_api_key=settings.tinyfish_api_key,
             limit=limit, workflow_run_id=run_id, main_ws=main_ws,
         )
         finish_workflow_run(conn, run_id, status="completed")
@@ -280,32 +283,46 @@ def enrich_companies_cmd(limit: int | None) -> None:
 
     click.echo(
         f"Evaluated {result['evaluated']} company(s): {result['enriched']} enriched "
-        f"({result['enriched_fmp']} via FMP, {result['enriched_startuphub']} via StartupHub), "
-        f"{result['no_match']} had no data from either free source (left blank)."
+        f"({result['enriched_fmp']} via FMP, {result['enriched_startuphub']} via StartupHub, "
+        f"{result['enriched_tinyfish']} via TinyFish), "
+        f"{result['no_match']} had no data from any source (left blank)."
     )
 
 
 @cli.command(name="lca-enrich")
-@click.argument("xlsx_path", type=click.Path(exists=True, dir_okay=False))
-def lca_enrich_cmd(xlsx_path: str) -> None:
-    """Match tracked companies against a manually-downloaded DOL/OFLC LCA
-    disclosure .xlsx file, populating companies.dol_lca_employer_name and
-    last_lca_certified_date for every match, and pushing the match onto every
-    matched company's existing Beacon rows. DOL's site blocks unattended
-    downloads, so there's no automated fetch here -- download the quarterly
-    file yourself from https://www.dol.gov/agencies/eta/foreign-labor/performance
-    (expand "Disclosure Data" -> LCA Programs) and pass its path here."""
-    from app.lca_enrichment import parse_lca_disclosure_file, run_lca_enrichment
+@click.argument("xlsx_paths", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
+def lca_enrich_cmd(xlsx_paths: tuple[str, ...]) -> None:
+    """Match tracked companies against one or more manually-downloaded
+    DOL/OFLC LCA disclosure .xlsx files, populating
+    companies.dol_lca_employer_name and last_lca_certified_date for every
+    match, and pushing the match onto every matched company's existing
+    Beacon rows. DOL's site blocks unattended downloads, so there's no
+    automated fetch here -- download the file(s) yourself from
+    https://www.dol.gov/agencies/eta/foreign-labor/performance (expand
+    "Disclosure Data" -> LCA Programs) and pass their paths here.
 
-    click.echo(f"Parsing {xlsx_path} (this can take a few minutes for a large quarterly file)...")
-    parsed = parse_lca_disclosure_file(xlsx_path)
-    click.echo(f"Found {len(parsed)} unique certified employers in the file.")
+    Each quarterly file is cumulative within its own federal fiscal year
+    (Oct 1 - Sep 30), so passing multiple quarters of the SAME fiscal year is
+    redundant -- pass one file per fiscal year you want covered (typically
+    that year's latest/Q4 release) to build real multi-year history."""
+    from app.lca_enrichment import merge_lca_data, parse_lca_disclosure_file, run_lca_enrichment
+
+    parsed_files = []
+    for xlsx_path in xlsx_paths:
+        click.echo(f"Parsing {xlsx_path} (this can take a few minutes for a large quarterly file)...")
+        parsed = parse_lca_disclosure_file(xlsx_path)
+        click.echo(f"Found {len(parsed)} unique certified employers in the file.")
+        parsed_files.append(parsed)
+
+    merged = merge_lca_data(*parsed_files) if len(parsed_files) > 1 else parsed_files[0]
+    if len(parsed_files) > 1:
+        click.echo(f"Merged across {len(parsed_files)} file(s): {len(merged)} unique certified employers total.")
 
     settings = get_settings()
     main_ws = resolve_main_worksheet(settings)
     conn = get_connection()
     try:
-        result = run_lca_enrichment(conn, parsed, main_ws=main_ws)
+        result = run_lca_enrichment(conn, merged, main_ws=main_ws)
     finally:
         conn.close()
 

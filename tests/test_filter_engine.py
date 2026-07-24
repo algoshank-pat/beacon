@@ -358,11 +358,39 @@ def test_remote_type_mismatch_fails(db_conn):
 
 
 def test_location_include_mismatch_fails(db_conn):
-    keywords = dict(DEFAULT_KEYWORDS, location_include=["Austin"])
-    job = _job(db_conn, title="Solutions Architect", location="Remote - US")
+    # Matches the resolved location_state, not raw location text -- a job
+    # actually in CA against a TX-only filter must fail even though nothing
+    # in the raw location string itself mentions "TX".
+    keywords = dict(DEFAULT_KEYWORDS, location_include=["TX"])
+    job = _job(db_conn, title="Solutions Architect", location="San Francisco, CA", location_state="CA")
     result = evaluate_job(job, None, DEFAULT_SETTINGS, keywords)
     assert not result.passed
     assert result.reason == "Filtered Out - Location"
+
+
+def test_location_include_match_passes(db_conn):
+    keywords = dict(DEFAULT_KEYWORDS, location_include=["TX"])
+    job = _job(db_conn, title="Solutions Architect", location="Austin, Texas", location_state="TX")
+    result = evaluate_job(job, None, DEFAULT_SETTINGS, keywords)
+    assert result.passed
+
+
+def test_location_include_is_case_insensitive(db_conn):
+    keywords = dict(DEFAULT_KEYWORDS, location_include=["tx"])
+    job = _job(db_conn, title="Solutions Architect", location="Austin, Texas", location_state="TX")
+    result = evaluate_job(job, None, DEFAULT_SETTINGS, keywords)
+    assert result.passed
+
+
+def test_location_include_permissive_when_location_state_unresolved(db_conn):
+    # A missing signal isn't evidence of a mismatch -- same rule this module
+    # already applies to remote_type. An informal place name or non-US
+    # remote posting that location_state couldn't resolve must not be
+    # filtered out just because it's blank.
+    keywords = dict(DEFAULT_KEYWORDS, location_include=["TX"])
+    job = _job(db_conn, title="Solutions Architect", location="Somewhere Ambiguous", location_state=None)
+    result = evaluate_job(job, None, DEFAULT_SETTINGS, keywords)
+    assert result.passed
 
 
 def test_require_us_location_filters_foreign_jobs(db_conn):
@@ -377,8 +405,8 @@ def test_require_us_location_filters_foreign_jobs(db_conn):
 def test_other_location_filters_still_log(db_conn):
     # skip_log is specific to require_us_location -- remote_type/location_include
     # mismatches still get logged normally.
-    keywords = dict(DEFAULT_KEYWORDS, location_include=["Austin"])
-    job = _job(db_conn, title="Solutions Architect", location="Remote - US")
+    keywords = dict(DEFAULT_KEYWORDS, location_include=["TX"])
+    job = _job(db_conn, title="Solutions Architect", location="San Francisco, CA", location_state="CA")
     result = evaluate_job(job, None, DEFAULT_SETTINGS, keywords)
     assert not result.passed
     assert result.skip_log is False

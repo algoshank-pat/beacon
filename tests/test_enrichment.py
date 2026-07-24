@@ -3,6 +3,7 @@ from app.enrichment import (
     run_enrichment,
     run_fmp_enrichment,
     run_startuphub_enrichment,
+    run_tinyfish_enrichment,
 )
 from app.sheets import JOB_ID_COL_INDEX, MAIN_SHEET_COLUMNS
 from tests.fakes import FakeWorksheet
@@ -302,6 +303,145 @@ def test_run_startuphub_enrichment_has_no_limit_by_default(db_conn, monkeypatch)
 
     result = run_startuphub_enrichment(db_conn, startuphub_api_key="fake-key")
     assert result["evaluated"] == 5
+
+
+# --- run_tinyfish_enrichment ---
+
+
+def _both_checked(conn, company_id):
+    conn.execute(
+        "UPDATE companies SET financial_data_last_checked = CURRENT_TIMESTAMP, "
+        "startuphub_last_checked = CURRENT_TIMESTAMP WHERE id = ?",
+        (company_id,),
+    )
+    conn.commit()
+
+
+def test_run_tinyfish_enrichment_skips_companies_without_a_job_on_beacon(db_conn):
+    company_id = _company_row(db_conn)
+    _both_checked(db_conn, company_id)
+    _job_row(db_conn, company_id, sheet_row_number=None)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key")
+    assert result["evaluated"] == 0
+
+
+def test_run_tinyfish_enrichment_skips_companies_fmp_and_startuphub_havent_checked_yet(db_conn):
+    # The core gating rule: TinyFish must never spend a call on a company
+    # the two structured sources haven't had a chance at yet.
+    company_id = _company_row(db_conn)
+    _job_row(db_conn, company_id)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key")
+    assert result["evaluated"] == 0
+
+
+def test_run_tinyfish_enrichment_skips_companies_checked_by_only_one_of_the_two(db_conn):
+    company_id = _company_row(db_conn)
+    db_conn.execute(
+        "UPDATE companies SET financial_data_last_checked = CURRENT_TIMESTAMP WHERE id = ?", (company_id,)
+    )
+    db_conn.commit()
+    _job_row(db_conn, company_id)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key")
+    assert result["evaluated"] == 0
+
+
+def test_run_tinyfish_enrichment_skips_companies_that_already_have_industry(db_conn):
+    company_id = _company_row(db_conn, industry="Already Known")
+    _both_checked(db_conn, company_id)
+    _job_row(db_conn, company_id)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key")
+    assert result["evaluated"] == 0
+
+
+def test_run_tinyfish_enrichment_skips_already_checked_companies(db_conn):
+    company_id = _company_row(db_conn)
+    _both_checked(db_conn, company_id)
+    db_conn.execute("UPDATE companies SET tinyfish_last_checked = CURRENT_TIMESTAMP WHERE id = ?", (company_id,))
+    db_conn.commit()
+    _job_row(db_conn, company_id)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key")
+    assert result["evaluated"] == 0
+
+
+def test_run_tinyfish_enrichment_uses_tinyfish_when_available(db_conn, monkeypatch):
+    company_id = _company_row(db_conn, name="SolutionIT")
+    _both_checked(db_conn, company_id)
+    _job_row(db_conn, company_id)
+
+    tinyfish_result = {
+        "industry": "Information Technology & Services",
+        "industry_source_url": "https://linkedin.com/company/solutionit",
+    }
+    monkeypatch.setattr("app.enrichment.fetch_tinyfish_industry", lambda name, key, session=None: tinyfish_result)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key")
+
+    assert result["enriched_tinyfish"] == 1
+    assert result["no_match_tinyfish"] == 0
+
+    row = db_conn.execute(
+        "SELECT industry, industry_source_url, tinyfish_last_checked FROM companies WHERE id = ?", (company_id,)
+    ).fetchone()
+    assert row["industry"] == "Information Technology & Services"
+    assert row["industry_source_url"] == "https://linkedin.com/company/solutionit"
+    assert row["tinyfish_last_checked"] is not None
+
+
+def test_run_tinyfish_enrichment_no_match_still_marks_tinyfish_checked(db_conn, monkeypatch):
+    company_id = _company_row(db_conn, name="Qode")
+    _both_checked(db_conn, company_id)
+    _job_row(db_conn, company_id)
+
+    monkeypatch.setattr("app.enrichment.fetch_tinyfish_industry", lambda name, key, session=None: None)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key")
+
+    assert result["enriched_tinyfish"] == 0
+    assert result["no_match_tinyfish"] == 1
+
+    row = db_conn.execute(
+        "SELECT industry, tinyfish_last_checked FROM companies WHERE id = ?", (company_id,)
+    ).fetchone()
+    assert row["industry"] is None
+    assert row["tinyfish_last_checked"] is not None
+
+
+def test_run_tinyfish_enrichment_skips_entirely_when_no_api_key(db_conn, monkeypatch):
+    company_id = _company_row(db_conn)
+    _both_checked(db_conn, company_id)
+    _job_row(db_conn, company_id)
+
+    def _should_not_be_called(*args, **kwargs):
+        raise AssertionError("fetch_tinyfish_industry should not be called without a TinyFish API key")
+
+    monkeypatch.setattr("app.enrichment.fetch_tinyfish_industry", _should_not_be_called)
+
+    result = run_tinyfish_enrichment(db_conn, tinyfish_api_key=None)
+    assert result["enriched_tinyfish"] == 0
+    assert result["evaluated"] == 0
+
+
+def test_run_tinyfish_enrichment_pushes_result_onto_existing_beacon_row(db_conn, monkeypatch):
+    company_id = _company_row(db_conn)
+    _both_checked(db_conn, company_id)
+    job_id = _job_row(db_conn, company_id)
+
+    row_values = [""] * len(MAIN_SHEET_COLUMNS)
+    row_values[JOB_ID_COL_INDEX - 1] = str(job_id)
+    main_ws = FakeWorksheet(rows=[MAIN_SHEET_COLUMNS, row_values])
+
+    tinyfish_result = {"industry": "Construction", "industry_source_url": "https://linkedin.com/x"}
+    monkeypatch.setattr("app.enrichment.fetch_tinyfish_industry", lambda name, key, session=None: tinyfish_result)
+
+    run_tinyfish_enrichment(db_conn, tinyfish_api_key="fake-key", main_ws=main_ws)
+
+    row_dict = dict(zip(MAIN_SHEET_COLUMNS, main_ws.rows[1]))
+    assert row_dict["Industry"] == "Construction"
 
 
 # --- get_fmp_enriched_today_count ---

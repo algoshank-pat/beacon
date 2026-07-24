@@ -41,10 +41,20 @@ Run directly: `python -m app.scheduler`
 from __future__ import annotations
 
 import logging
-import msvcrt
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# Conditional by platform, not a single cross-platform package -- both
+# msvcrt (Windows) and fcntl (POSIX) are standard-library, so this needs no
+# new dependency. Real users on macOS/Linux exist despite this project
+# shipping Windows-first (its own developer machine); see
+# acquire_single_instance_lock's docstring for why both locks share the
+# same "auto-releases on crash, no stale file to clean up" property.
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -84,23 +94,36 @@ def acquire_single_instance_lock(lock_path: Path = LOCK_PATH):
     reproduced even from a single, deliberate, manually-typed launch), so
     this guards against it structurally instead.
 
-    Uses an OS-level byte-range lock (msvcrt.locking), not a PID file --
-    Windows releases the lock automatically when the file handle closes,
-    including on a crash or `Stop-Process -Force`, so there's no stale lock
-    file to manually clean up the way a PID-file approach would need.
+    Uses an OS-level lock (msvcrt.locking on Windows, fcntl.flock on
+    macOS/Linux), not a PID file -- both release automatically when the file
+    handle closes, including on a crash or a forced kill (`Stop-Process
+    -Force` / `kill -9`), so there's no stale lock file to manually clean up
+    the way a PID-file approach would need on either platform.
 
     Returns the open file handle (keep a reference for the process's
     lifetime; closing it releases the lock). Raises
     SchedulerAlreadyRunningError if another instance already holds it.
 
-    Deliberately never writes to the file (e.g. the holder's PID) -- msvcrt's
-    byte-range lock and the CRT's buffered I/O on the same handle don't mix
-    safely; a write/flush through the very handle that holds the lock can
-    itself raise PermissionError. The lock's existence is the only signal
-    needed; nothing reads this file's contents."""
+    Deliberately never writes to the file (e.g. the holder's PID) --
+    msvcrt's byte-range lock and the CRT's buffered I/O on the same handle
+    don't mix safely; a write/flush through the very handle that holds the
+    lock can itself raise PermissionError. Kept the same on the fcntl path
+    too, for one identical contract on both platforms rather than two
+    subtly different ones. The lock's existence is the only signal needed;
+    nothing reads this file's contents.
+
+    Not yet run live on macOS/Linux (this project's own use is Windows-only
+    today) -- built directly against fcntl.flock's documented semantics
+    (LOCK_EX | LOCK_NB raises BlockingIOError, a subclass of OSError, on
+    contention -- the same exception type the existing msvcrt path already
+    raises and handles below) rather than left as a real gap for whoever
+    runs this on a Mac first."""
     lock_file = open(lock_path, "a+")
     try:
-        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        if sys.platform == "win32":
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         lock_file.close()
         raise SchedulerAlreadyRunningError(

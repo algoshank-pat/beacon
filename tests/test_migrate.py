@@ -38,7 +38,7 @@ def test_run_migrations_is_idempotent(tmp_path):
             "0004_add_startuphub_last_checked.sql", "0005_add_link_checked_at.sql",
             "0006_add_salary_checked_at.sql", "0007_add_location_state.sql",
             "0008_add_cloud_platforms.sql", "0009_add_cloud_platforms_checked_at.sql",
-            "0010_add_dol_lca_columns.sql",
+            "0010_add_dol_lca_columns.sql", "0011_add_tinyfish_industry_columns.sql",
         ]
         assert second == []
     finally:

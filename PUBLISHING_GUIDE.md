@@ -137,7 +137,7 @@ git push
 ## STEP 7 — Polish the GitHub Repository Page
 
 1. **About** (gear icon, top-right of the repo page):
-   - Description: `Job search automation for H-1B & visa holders — screens out sponsorship dead ends automatically, AI only where it's actually needed`
+   - Description: `Practical, private job search automation for H-1B & visa holders — tracked in your own Google Sheet, self-hosted end-to-end, AI only where it's actually needed`
    - Topics: `h1b` `visa-sponsorship` `job-search` `international-students` `opt` `stem-opt` `immigration` `python` `automation` `google-sheets` `claude-api` `anthropic` `apscheduler` `sqlite`
 2. **Pin the repository** on your GitHub profile
 3. **Create a Release**:

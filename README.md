@@ -1,6 +1,24 @@
 # 🔭 Beacon — Job Search Automation for Work Visa Holders
 
-> **This is not a job site, a hosted service, or an app you sign up for.** It's a free, open-source Python program you install and run yourself, entirely on your own computer. It discovers postings across the web, automatically screens out visa-sponsorship dead ends, scores fit against your resume, and surfaces everything in a Google Sheet you already know how to use — for pennies, because AI is only called when it's actually needed. Since it only ever runs on your own machine, nothing about your job search is ever captured, stored, or seen by anyone but you.
+**In plain words:**
+- Beacon finds job postings for you, automatically.
+- It checks each one and flags whether that company will actually sponsor a work visa.
+- Everything shows up in a Google Sheet — no new app to learn.
+- It runs on your own computer. Nobody else ever sees your search.
+
+## 📸 See it in action
+
+| Beacon Tracking Sheet | SQLite Schema |
+|---|---|
+| ![Beacon sheet with job postings, visa flags, and decision columns](./docs/screenshots/beacon_sheet.png) | ![SQLite database schema — all tables and indices](./docs/screenshots/database_schema.png) |
+
+| Sample Company Data | Source: a real public Greenhouse job board |
+|---|---|
+| ![Sample rows from the companies table](./docs/screenshots/database_data.png) | ![Anthropic's real public Greenhouse job board](./docs/screenshots/source_greenhouse.png) |
+
+*(Company/job data above is from a live personal account — the Decision/My Decision columns shown are unset defaults, not personal choices. See `docs/screenshots/README.md` for the full redaction notes.)*
+
+> **The longer version:** This is not a job site, a hosted service, or an app you sign up for. It's a free, open-source Python program you install and run yourself, entirely on your own computer. It discovers postings across the web, automatically screens out visa-sponsorship dead ends, scores fit against your resume, and surfaces everything in a Google Sheet you already know how to use — for pennies, because AI is only called when it's actually needed. Since it only ever runs on your own machine, nothing about your job search is ever captured, stored, or seen by anyone but you.
 
 ![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)
 ![Anthropic](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-D97757?logo=anthropic&logoColor=white)
@@ -25,7 +43,7 @@
 
 ## ⚠️ Disclaimer
 
-**This is not legal or immigration advice, and I'm not a recruiter, employer, or immigration attorney.** Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, doesn't guarantee any company will actually sponsor you, and doesn't maintain a curated list of "companies that sponsor visas" anywhere. There is no list. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
+**This is not legal or immigration advice, and I'm not a recruiter, employer, or immigration attorney.** Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, and doesn't maintain any personally curated list of "companies that sponsor visas" — there is no such list. The one exception is the [DOL LCA match](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification), which is real public government filing data, not a curated opinion — and even that is a "likely sponsors" positive indicator, never a guarantee, since a company's past filing says nothing about whether this specific posting will sponsor. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
 
 ---
 
@@ -77,13 +95,17 @@ Fair question — here's the honest comparison, not a sales pitch. LinkedIn Prem
 
 This is a second, distinct signal, and it's real government data, not another guess from posting text. The Department of Labor's Office of Foreign Labor Certification (OFLC) publishes quarterly LCA (H-1B, H-1B1, E-3) disclosure data — every employer that filed, and when. Matched against your own tracked companies, it answers "has this company actually sponsored before, and when," which no posting's own text can tell you.
 
+A match means **"Likely work visa sponsor"** — a positive historical signal, not a guarantee. A company that filed an LCA before has, at minimum, gone through the process once; it says nothing about whether *this specific posting* will sponsor. A company can have a strong filing history and still post a req that explicitly says no sponsorship (different team, changed policy, one recruiter's mistake) — read the individual posting's own Visa Flag too, don't rely on a company-level match alone. And the absence of a match doesn't mean a company won't sponsor — it may simply have never needed to yet, or its filings may be under a different legal entity name.
+
 **This isn't automated** — DOL's site blocks unattended downloads (confirmed live: this project's own automated browser tool and a plain HTTP request were both blocked), so it's a manual, one-time-per-quarter step:
 
-1. Go to the [OFLC Performance Data page](https://www.dol.gov/agencies/eta/foreign-labor/performance), expand "Disclosure Data," and download the current quarter's LCA `.xlsx` file (it's real, ~137MB, ~1M rows)
-2. Run `python -m app.cli lca-enrich <path-to-file>`
+1. Go to the [OFLC Performance Data page](https://www.dol.gov/agencies/eta/foreign-labor/performance), expand "Disclosure Data," and download the current quarter's LCA `.xlsx` file (it's real, ~137MB, ~1M rows). Each file is cumulative *within its own federal fiscal year* (Oct 1 – Sep 30), so downloading more than one quarter of the same fiscal year adds nothing — for real multi-year history, download one file per fiscal year you want covered (typically that year's last/Q4 release)
+2. Run `python -m app.cli lca-enrich <path-to-file> [<path-to-another-file> ...]` — pass as many files as you downloaded in one call; it merges them, keeping the most recent filing date per employer across all of them
 3. It matches every tracked company by name and updates two new Sheet columns, `DOL LCA Match` and `Last Sponsored`, plus the underlying `companies.dol_lca_employer_name`/`last_lca_certified_date` columns
 
 Same name-matching risk as everywhere else in this pipeline (see the LinkedIn Premium comparison and Cost Model above) — real-world validation against this project's own 2,682-company table found 223 matches from a single quarter with zero false positives spotted, including in the highest-collision-risk short-name group, but this isn't a guarantee for every name.
+
+**This signal is entirely separate from the Visa Flag/Haiku classification above, and doesn't reduce its AI usage** — a company-level LCA match isn't currently used to skip or shortcut the per-posting Haiku check, since a historical filing says nothing about what *this specific posting's own text* says. The two run side by side, not one instead of the other.
 
 Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved.
 
@@ -127,20 +149,6 @@ The resume-fit scoring step (Claude Sonnet) never runs on its own. It's controll
 | `Reject` | You | Removes the row, no AI involved |
 
 There's no "score everything" button, and no background job silently scoring your whole backlog. Every single Sonnet call in this pipeline exists because you typed `Go Score` into one specific cell. That's what "AI where it matters, automation everywhere else" actually looks like in practice, not just as a slogan.
-
----
-
-## 📸 Screenshots
-
-| Beacon Tracking Sheet | SQLite Schema |
-|---|---|
-| ![Beacon sheet with job postings, visa flags, and decision columns](./docs/screenshots/beacon_sheet.png) | ![SQLite database schema — all tables and indices](./docs/screenshots/database_schema.png) |
-
-| Sample Company Data | Source: a real public Greenhouse job board |
-|---|---|
-| ![Sample rows from the companies table](./docs/screenshots/database_data.png) | ![Anthropic's real public Greenhouse job board](./docs/screenshots/source_greenhouse.png) |
-
-*(Company/job data above is from a live personal account — the Decision/My Decision columns shown are unset defaults, not personal choices. See `docs/screenshots/README.md` for the full redaction notes.)*
 
 ---
 
@@ -318,7 +326,7 @@ Both are live-editable after setup too — the next scheduled run just picks up 
 | `title_exclude` | Title-only blocklist (e.g. "Intern", "Director") |
 | `seniority` | Only these seniority levels (e.g. `mid`, `senior`, `staff`) |
 | `remote_type` | Only these work-location types (e.g. `remote`, `hybrid`) |
-| `location_include` | Only postings whose location text matches one of these |
+| `location_include` | Only postings resolved to one of these US states (2-letter code, e.g. `TX`, `CA`) or `Remote-USA` — matched against the clean `location_state` field (see `app.location_state`), not raw location text. A posting `location_state` couldn't resolve is passed through rather than filtered out, since a missing signal isn't evidence of a mismatch |
 | `industries_include` | **Only certain industries** — a real hard filter, empty by default so it's a no-op until you populate it |
 | `posted_within_days` | Drop anything older than this many days |
 | `company_priority_min` | Only companies at or above this priority tier (`S`/`A`/`B`/`C`) |
@@ -340,7 +348,7 @@ Both are live-editable after setup too — the next scheduled run just picks up 
 | **Disk space** | Starts near-empty; grows with how much you ingest. This project's own database reached ~490MB after several weeks of continuous 3x/day polling against 150+ tracked companies plus broad discovery — budget a few hundred MB to a couple GB for long-term personal use |
 | **Memory** | The scheduler process itself runs at roughly **20-30MB RAM** in practice (measured on this project's live process) — it's I/O-bound (waiting on API calls), not compute-heavy |
 | **CPU** | Negligible — brief bursts during each poll, idle the rest of the time |
-| **Platform** | **Every CLI command (`migrate`, `ingest`, `filter`, `pipeline`, etc.) is plain cross-platform Python and runs fine on Windows, macOS, or Linux.** The one exception: `app/scheduler.py` (the persistent "run continuously" process) currently uses a Windows-only file lock (`msvcrt`) to guarantee only one instance runs at a time — on macOS/Linux you'd need to either run pipeline commands manually/via cron, or swap that lock for a `fcntl`-based one (a small, contained change) before running the scheduler unattended |
+| **Platform** | **Every CLI command (`migrate`, `ingest`, `filter`, `pipeline`, etc.) is plain cross-platform Python and runs fine on Windows, macOS, or Linux.** `app/scheduler.py` (the persistent "run continuously" process) now also runs on all three — its single-instance lock picks `msvcrt` on Windows or `fcntl.flock` on macOS/Linux automatically (`sys.platform` check, no new dependency). Built directly against `fcntl`'s documented locking semantics, not yet run live on a real Mac/Linux machine (this project's own daily use is Windows) — if you hit anything running it there, it's worth a bug report |
 
 ### Running continuously
 
@@ -395,31 +403,31 @@ beacon/
 ## ❓ FAQ
 
 **Can you get me a job, or tell me which companies sponsor visas?**
-No. See the [Disclaimer](#️-disclaimer) above — there's no curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. This tool reads a specific job posting's own text and classifies what *that posting* says, nothing more.
+> No. See the [Disclaimer](#️-disclaimer) above — there's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification)) — that's a positive historical indicator, not a guarantee about any specific role.
 
 **Can I use more than one resume?**
-Not yet — a real, known limitation. Fit-scoring always reads a single file (`resumes/base_resume.md`, falling back to `.txt` then `.docx`, first match wins), with no way to select a different one per job or per role type. If you want to score against different resumes for different kinds of roles, today's only workaround is manually swapping the file between runs.
+> Not yet — a real, known limitation. Fit-scoring always reads a single file (`resumes/base_resume.md`, falling back to `.txt` then `.docx`, first match wins), with no way to select a different one per job or per role type. If you want to score against different resumes for different kinds of roles, today's only workaround is manually swapping the file between runs.
 
 **Does this scrape LinkedIn?**
-No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it — every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.
+> No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it — every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.
 
 **Is this a website or a service I sign up for?**
-No. There's no server, no account, no sign-up anywhere. You clone the code and run it as a Python program on your own laptop, using your own accounts for every external service it talks to (Google Sheets, Anthropic, Adzuna, etc.). This project doesn't host anything and doesn't have a backend that could see your data even if it wanted to.
+> No. There's no server, no account, no sign-up anywhere. You clone the code and run it as a Python program on your own laptop, using your own accounts for every external service it talks to (Google Sheets, Anthropic, Adzuna, etc.). This project doesn't host anything and doesn't have a backend that could see your data even if it wanted to.
 
 **Is my data private?**
-Yes, entirely. It runs locally on your own machine against your own SQLite database and your own Google Sheets. Nothing is sent anywhere except the API calls you configure yourself (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
+> Yes, entirely. It runs locally on your own machine against your own SQLite database and your own Google Sheets. Nothing is sent anywhere except the API calls you configure yourself (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
 
 **How much does it actually cost to run?**
-The software itself is free — there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Cost Model](#-cost-model--ai-only-when-its-actually-needed): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88 — that's what actual usage costs at this scale, not a fee anyone charges you.
+> The software itself is free — there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Cost Model](#-cost-model--ai-only-when-its-actually-needed): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88 — that's what actual usage costs at this scale, not a fee anyone charges you.
 
 **Do I need to know Python to use this?**
-You need to be comfortable running a few CLI commands and editing a `.env` file (see [Setup](#️-setup)). Day-to-day use afterward is entirely in Google Sheets.
+> You need to be comfortable running a few CLI commands and editing a `.env` file (see [Setup](#️-setup)). Day-to-day use afterward is entirely in Google Sheets.
 
 **Can I use this for a non-tech job search?**
-Yes — nothing in the filter/keyword design is tech-specific. The example keyword lists target Solutions Architect/Presales-style roles because that's what this was originally built for, but every keyword, title exclusion, and threshold lives in an editable table, not code.
+> Yes — nothing in the filter/keyword design is tech-specific. The example keyword lists target Solutions Architect/Presales-style roles because that's what this was originally built for, but every keyword, title exclusion, and threshold lives in an editable table, not code.
 
 **Why Google Sheets instead of a real dashboard?**
-Because you already know how to use it, it's free, it's already got notifications/mobile access/sharing solved, and it means zero UI code to build or maintain.
+> Because you already know how to use it, it's free, it's already got notifications/mobile access/sharing solved, and it means zero UI code to build or maintain.
 
 ---
 
@@ -431,9 +439,8 @@ Because you already know how to use it, it's free, it's already got notification
 - Resume/cover-letter generation handoff to Claude Desktop on Approve (designed, not yet built)
 - **Salary-range filtering** — salary is extracted and shown today, but nothing actually filters on it yet
 - **A real "startups only" filter** — `founded_after_year` and `employee_count_max` are rough proxies today; `companies.funding_stage`/`company_type` are already enriched (`series_a`, `private`, etc.) but never wired into filtering at all
-- **`location_include` should filter on the clean `location_state` field, not raw location text** — a real, slightly ironic gap: `location_state` exists specifically to resolve messy location strings, but the filter itself was never updated to use it, so it still does a raw substring match against inconsistent source text
-- Pull additional DOL LCA quarters/years (today's real historical H-1B data only covers one recent quarter) into `app/lca_enrichment.py` for a fuller multi-year picture
-- Automate the quarterly LCA re-check on a schedule once there's a reliable way past DOL's bot protection (today it's a manual download + `python -m app.cli lca-enrich`, by design — see the Real Historical Sponsorship Data section below)
+- Actually download and feed in more than one fiscal year's LCA file — `lca-enrich` already accepts and merges multiple files (see the Real Historical Sponsorship Data section above), but only one quarter (FY2026 Q2) has been run against the live table so far
+- Automate the quarterly LCA re-check on a schedule once there's a reliable way past DOL's bot protection (today it's a manual download + `python -m app.cli lca-enrich`, by design — see the Real Historical Sponsorship Data section above)
 - **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
 - **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column
 - **Adding other AI backends for visa and fit scoring, alongside Claude** — specifically open-weight models run locally on your own laptop (e.g. via Ollama), not just another paid API. This is the concrete path toward [the Goal](#-the-goal) of $0 ongoing cost: today's design already keeps Claude usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude's reliability on the same task first
@@ -474,6 +481,16 @@ This is the most involved one, but it's a one-time setup:
 8. **Share each Sheet** with that `client_email` address, giving it **Editor** access, exactly like sharing with a person — this is the step people most often miss, and without it every write will fail with a permissions error
 9. Copy each Sheet's ID from its URL (the long string between `/d/` and `/edit`) into `.env` as `GOOGLE_SHEET_ID` and `GOOGLE_JOB_LOG_SHEET_ID`
 
+### Turning on Google Sheet email notifications
+This is what makes Beacon feel "live" instead of a spreadsheet you have to remember to check — Google's own native notification rule, not anything this app builds or maintains. Set it up once, only on the **Beacon** sheet (the Job Log is deliberately left off — see [Why two separate Google Sheets](docs/ARCHITECTURE.md#why-two-separate-google-sheets) — so excluded jobs don't also email you):
+1. Open the Beacon sheet in your own Google account (the one you shared with the service account, not the service account itself)
+2. **Tools → Notification settings** (older Sheets UI: **Tools → Notification rules...**)
+3. Set it to notify **"Any changes are made"**
+4. Choose **"Email - right away"** if you want a ping the moment a new job lands or a status changes, or **"Email - daily digest"** for one summary a day instead
+5. Save — you'll get emailed at your Google account's address any time the app (or you) writes to the sheet
+
+Because the app writes as the service account's own distinct identity (not you), Google's rule fires on every automated write same as it would for a human edit — no extra integration code needed. If you don't want emails at all, just skip this section; nothing else in Beacon depends on it.
+
 ### Financial Modeling Prep (`FMP_API_KEY`)
 1. Go to [financialmodelingprep.com](https://financialmodelingprep.com) and sign up for a free account
 2. Your API key is shown directly on your dashboard
@@ -484,11 +501,44 @@ This is the most involved one, but it's a one-time setup:
 2. Get your API key from your account dashboard
 3. Copy it into `.env`
 
+### DOL LCA disclosure data (no signup, no API key — manual download)
+This is the source behind the `DOL LCA Match`/`Last Sponsored` columns (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification) above for what those fields mean and, just as important, what they *don't* guarantee). Unlike everything else in this Appendix, there's no account and no key — it's public U.S. Department of Labor data — but it does need a bit more manual care to keep current.
+
+**Prerequisites**
+- Just a regular web browser. No signup, no key, no cost — this is public government data
+- A few hundred MB of free disk space — one fiscal year's cumulative file runs ~100–150MB (the real FY2026 Q2 file, measured live, was ~137MB / ~1M rows)
+- The download itself has to happen in your own normal browser session, not through this app — **DOL's site blocks unattended/automated downloads** (confirmed live: both this project's sandboxed browser tool and a plain scripted HTTP request were blocked)
+
+**Downloading a file**
+1. Go to the [OFLC Performance Data page](https://www.dol.gov/agencies/eta/foreign-labor/performance)
+2. Expand **"Disclosure Data"**
+3. Under **"LCA Programs (H-1B, H-1B1, E-3)"**, find the fiscal year(s) you want. Each quarter's file is cumulative *within its own federal fiscal year* (Oct 1 – Sep 30), so for each fiscal year, download only its latest published quarter — downloading every quarter of the same year adds nothing, since the newest one already contains all the earlier ones
+4. Click the file link to download the `.xlsx` (it's large — budget a few minutes)
+5. Repeat steps 3–4 for any additional fiscal years you want covered
+6. Save every file you download into a local `lca_data/` folder in the project root (already covered by `.gitignore` — these files are large and shouldn't be committed)
+
+**Feeding it into Beacon**
+```
+python -m app.cli lca-enrich lca_data/FY2026_Q2.xlsx lca_data/FY2025_Q4.xlsx
+```
+Pass every file you want considered in the same command — it parses each one, merges them (keeping the most recent filing date per employer across all files given), matches every tracked company by name, and updates `DOL LCA Match`/`Last Sponsored` on both Sheets plus the underlying `companies` columns.
+
+**Keeping it current — there's no "training" here, just a snapshot you refresh by hand**
+- DOL adds a new quarter roughly every 3 months. Since each new quarter's file is cumulative for its fiscal year, re-running with just that newest file already picks up every new filing from that fiscal year — you don't need to re-download older quarters of the same year.
+- It's safe to run `lca-enrich` with just one new file at a time as quarters come out — a matched company's stored date is only ever updated forward. If the date already in the database for a company is more recent than what the current run's file(s) show for it, the existing date is left alone rather than being overwritten backward in time (so accidentally re-feeding an older fiscal year's file after a newer one is already loaded can't roll anything back).
+- Still worth keeping every file you've downloaded in `lca_data/` rather than deleting them — there's no persisted history of *which* files have already been applied, so if you ever need to rebuild the database from scratch, you'll want the full set on hand again.
+
 ---
 
 ## 📄 License
 
 MIT — see [LICENSE](./LICENSE).
+
+---
+
+> [!CAUTION]
+> 1. **Not legal or immigration advice.** I'm not a recruiter, employer, or immigration attorney, and nothing here guarantees any company will actually sponsor you.
+> 2. **The "Likely work visa sponsor" signal is not a promise.** It's a positive historical indicator from public government filing data — a company can have a strong filing history and still not sponsor for a specific role.
 
 ---
 

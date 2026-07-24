@@ -91,14 +91,14 @@ Stays cheap because: company lookups only use free data sources (left blank if n
 
 ## 🧠 How AI Fits In
 
-AI makes exactly two decisions here. Everything else is free, deterministic code:
+AI makes exactly two decisions in this pipeline — everything else is free, deterministic code:
 
-1. **Does this job sponsor visas?** Checked automatically on every posting — free pattern-matching first, AI only for the genuinely unclear remainder.
-2. **Does this job match your resume?** Only checked when you type `Go Score` into that row's **My Decision** cell — never automatic, never your whole backlog.
+- **Visa check** — does this posting rule out sponsorship? Automatic on every job; free pattern-matching first, AI only for the genuinely unclear remainder.
+- **Fit score** — does this job match your resume? Only when you type `Go Score` into that row — never automatic, never your whole backlog.
 
-There's also a separate, real signal: **DOL government filing data** on which companies have sponsored before — a "Likely work visa sponsor" flag, not a guarantee. Run it with `python -m app.cli lca-enrich <path>`; it works alongside the checks above, not instead of them.
+A third signal sits alongside these two, but isn't AI at all: real **DOL government filing data** on which companies have sponsored before — a "Likely work visa sponsor" flag, not a guarantee.
 
-*(Full mechanics — the pipeline diagram, exactly what the AI sees, every My Decision state — in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).)*
+*(Full mechanics — the pipeline diagram, exactly what the AI sees, every My Decision state, how to run the DOL LCA check — in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).)*
 
 ---
 

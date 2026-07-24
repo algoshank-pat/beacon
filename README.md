@@ -51,7 +51,7 @@ Fair question. LinkedIn Premium doesn't solve the one thing that costs visa hold
 
 ## 💰 Time and Cost Savings
 
-Real numbers from this project's own history, not an estimate. **Software is free**; the $8.88 is real AI usage paid directly to Anthropic, not a price for this project:
+Real numbers from this project's own history, not an estimate. **Software is free**; any AI usage is paid directly to Anthropic, not to this project:
 
 | Metric | Value |
 |---|---|
@@ -59,7 +59,9 @@ Real numbers from this project's own history, not an estimate. **Software is fre
 | Actually reached your Sheet, worth your time (2.4%) | **3,355** |
 | Caught as visa-restricted before you wasted time on them | **577** |
 | Companies tracked | **2,674** |
-| **Total AI spend, ever** | **$8.88** |
+| **Typical AI spend for a real user** | **Under $1/month** (**$0** if you never type `Go Score`) |
+
+For reference, this project's own real lifetime spend so far, across all 137,318 postings above and several weeks of daily use, is **$8.88 total**.
 
 Stays cheap because: company lookups only use free data sources (left blank if neither has an answer, never a paid fallback); resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching, with AI stepping in only for the small remainder where the wording is genuinely unclear.
 

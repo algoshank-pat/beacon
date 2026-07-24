@@ -47,7 +47,7 @@
 
 **Every work visa holder should be able to find jobs suitable for them, and apply to companies that actually sponsor work visas, with real information about who has sponsored before.** That's the point: less headache, less wasted time, more of your search actually going toward employers who'll consider you.
 
-And this has to stay free for anyone to adopt without a second thought. It's already low cost today, under $1/month for typical personal use (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed) for the real numbers) — but "low cost" still means worrying about a bill. The real goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all: **$0**, permanently, so nobody has to think about AI spend to run their own job search.
+And this has to stay free for anyone to adopt without a second thought. It's already low cost today, under $1/month for typical personal use (see [Savings](#-savings--time--cost) for the real numbers) — but "low cost" still means worrying about a bill. The real goal, not built yet, is running visa and job-fit classification on open-weight models on your own laptop instead of a paid API at all: **$0**, permanently, so nobody has to think about AI spend to run their own job search.
 
 ---
 
@@ -59,7 +59,7 @@ Beacon was built to remove that specific waste, for close to $0:
 
 - **Never manually re-check "do they sponsor?" again.** Every posting's own text is automatically screened for sponsorship language and labeled `Sponsored` / `No sponsor` / `No mention` / `Unclear` before you ever open it.
 - **You define what "relevant" means, not a hardcoded list.** The role/tech keyword lists that decide what gets surfaced at all are stored in a database table, not buried in code — retarget it for your own field in the Sheet or the DB, no redeploy needed.
-- **AI is the last resort, not the first.** See [Cost Model](#-cost-model--ai-only-when-its-actually-needed) below — the real numbers, not a guess.
+- **AI is the last resort, not the first.** See [Savings](#-savings--time--cost) below — the real numbers, not a guess.
 - **Runs unattended, three times a day**, and lands everything in a Google Sheet — no new app to learn, no dashboard to check obsessively.
 
 ## 💸 Why not just pay for LinkedIn Premium?
@@ -92,7 +92,7 @@ A match means **"Likely work visa sponsor"** — a positive historical signal, n
 2. Run `python -m app.cli lca-enrich <path-to-file> [<path-to-another-file> ...]` — pass as many files as you downloaded in one call; it merges them, keeping the most recent filing date per employer across all of them
 3. It matches every tracked company by name and updates two new Sheet columns, `DOL LCA Match` and `Last Sponsored`, plus the underlying `companies.dol_lca_employer_name`/`last_lca_certified_date` columns
 
-Same name-matching risk as everywhere else in this pipeline (see the LinkedIn Premium comparison and Cost Model above) — real-world validation against this project's own 2,682-company table found 223 matches from a single quarter with zero false positives spotted, including in the highest-collision-risk short-name group, but this isn't a guarantee for every name.
+Same name-matching risk as everywhere else in this pipeline (see the LinkedIn Premium comparison and Savings section above) — real-world validation against this project's own 2,682-company table found 223 matches from a single quarter with zero false positives spotted, including in the highest-collision-risk short-name group, but this isn't a guarantee for every name.
 
 **This signal is entirely separate from the Visa Flag/Haiku classification above, and doesn't reduce its AI usage** — a company-level LCA match isn't currently used to skip or shortcut the per-posting Haiku check, since a historical filing says nothing about what *this specific posting's own text* says. The two run side by side, not one instead of the other.
 
@@ -145,7 +145,7 @@ There's no "score everything" button, and no background job silently scoring you
 
 - **Five job sources**: broad keyword discovery via Adzuna, plus direct polling of Greenhouse, Lever, Ashby, and SmartRecruiters for companies you specifically track — no query-time filtering needed on the targeted side, every posting is pulled and filtered locally
 - **Self-onboarding companies**: type a company name into a `SEED` row on the Sheet and the pipeline guesses and verifies a real job-board slug across all four ATS platforms automatically — no manual API digging
-- **Three-tier visa classification**: regex → free keyword pre-check → Haiku, cheapest first (see Cost Model)
+- **Three-tier visa classification**: regex → free keyword pre-check → Haiku, cheapest first (see Savings)
 - **Live-editable filter criteria**: role/tech keyword include-lists, title excludes, seniority, location, posted-date window, company priority tier — all in a SQLite table, editable without touching code
 - **Fit scoring on demand, not by default**: Claude scores a job against your resume only when *you* flag it `Go Score` on the Sheet — never runs against the whole backlog automatically
 - **Free company enrichment**: employee count, funding stage, HQ, revenue — from two free-tier APIs only, with zero LLM fallback (a field just stays blank rather than ever costing money to fill in)
@@ -200,53 +200,25 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 
 ---
 
-## ⏱️ Time Saved — The Jobs You Never Had to Read
+## 💰 Savings — Time & Cost
 
-Real funnel numbers from this project's own history, out of every posting it has ever seen:
-
-| Stage | Jobs |
-|---|---|
-| Total postings ingested | **137,318** |
-| Automatically deduplicated (same posting seen across multiple sources) | 110,851 |
-| Filtered out before ever reaching you at all (wrong title, location, seniority) | 17,042 |
-| Removed after the posting closed or expired | 6,683 |
-| **Looked like a real match on title and keywords, then automatically caught and removed for visa-sponsorship restrictions** | **577** |
-| **Actually reached your Sheet, worth spending your time on** | **3,355** |
-
-Out of 137,318 postings, only about 2.4% ever needed a minute of your attention. Everything else was resolved automatically, including 577 postings that would have looked like a genuine fit, cost you real time reading and maybe even applying, before you ever discovered the actual dead end: no visa sponsorship.
-
-**What that language actually looks like** — real phrasing this project has caught in live job postings, usually buried a few paragraphs in, not in the title:
-
-> *"We are unable to sponsor H-1B, F-1 OPT, and STEM OPT extension at this time."*
-> *"This role is not open to visa sponsorship."*
-> *"Visa sponsorship is not available for this position."*
-> *"...without requiring a visa transfer or visa sponsorship."*
-> *"This position requires a government security clearance; you must be a US citizen for consideration."*
-
-Every one of these reads like ordinary EEO/legal boilerplate at a glance, easy to skim past, easy to miss until you're already deep into an application. That's the exact text Beacon's classifier is built to catch.
-
----
-
-## 💰 Cost Model — AI Only When It's Actually Needed
-
-> **This software itself is free and open source (MIT license) — there's no fee, subscription, or payment to download or run it.** The $8.88 below is *not* a price. It's the real, total AI usage cost from one person's own account, accumulated over several weeks of actual daily use, paid directly to Anthropic (not to this project) at their standard pay-as-you-go API rates. You bring your own API key and only ever pay the provider for what you personally use — for most people running this at a similar scale, that's cents to a few dollars over a real job search, not a fixed cost anyone charges you.
-
-Real numbers from this project's own live history, not an estimate:
+Real numbers from this project's own history, not an estimate — **software is free**; the $8.88 is real AI usage paid directly to Anthropic, not a price for this project:
 
 | Metric | Value |
 |---|---|
-| Jobs ever ingested | **137,318** |
-| Companies tracked | **2,674** (161 with a direct, confirmed ATS board) |
-| Jobs classified `No mention` (sponsorship not discussed at all) — **$0, regex/keyword only** | **9,238** |
-| Jobs classified `restricted` — a real sponsorship dead-end, automatically caught before you'd waste time on it | **577** |
-| Jobs classified `sponsors` — a confirmed positive signal | **103** |
-| **Total cumulative LLM spend, across every visa classification and every fit-score ever run** | **$8.88** |
+| Total postings ever ingested | **137,318** |
+| Actually reached your Sheet, worth your time (2.4%) | **3,355** |
+| Caught as visa-restricted before you wasted time on them | **577** |
+| Companies tracked | **2,674** |
+| **Total AI spend, ever** | **$8.88** |
 
-That's not the cost of a small test run — that's everything this project has ever spent, over its entire lifetime, after processing more than 100,000 job postings. Here's why it stays this cheap:
+Stays cheap because: company lookups only use free data sources (left blank if neither has an answer, never a paid fallback); resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching — AI only steps in for the small remainder where the wording is genuinely unclear.
 
-1. **Looking up company details (size, funding, HQ) never uses AI.** It only checks two free data sources. If neither one has the answer, the field is just left blank instead of guessing. We used to fall back to AI when both came up empty — that alone cost $0.15–0.75 per company, more expensive than everything else in the whole pipeline combined, for the part that mattered least.
-2. **Scoring how well a job matches your resume only happens when you ask for it.** You flag one specific job on the Sheet, and only then does the AI look at it. It never runs on your whole job list automatically.
-3. **Checking for visa sponsorship is mostly free too.** Most job postings don't mention visas at all, so those get skipped for free. Simple text-matching (no AI) catches most of what's left. AI only steps in for the small number of postings where the wording is genuinely unclear — and even then, it costs a tiny fraction of a cent per job.
+**What that restriction language actually looks like** — real phrasing caught in live postings, usually buried a few paragraphs in, not in the title:
+
+> *"We are unable to sponsor H-1B, F-1 OPT, and STEM OPT extension at this time."*
+> *"This role is not open to visa sponsorship."*
+> *"This position requires a government security clearance; you must be a US citizen for consideration."*
 
 ---
 
@@ -407,7 +379,7 @@ beacon/
 > Yes, entirely. It runs locally on your own machine against your own SQLite database and your own Google Sheets. Nothing is sent anywhere except the API calls you configure yourself (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
 
 **How much does it actually cost to run?**
-> The software itself is free — there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Cost Model](#-cost-model--ai-only-when-its-actually-needed): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88 — that's what actual usage costs at this scale, not a fee anyone charges you.
+> The software itself is free — there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Savings](#-savings--time--cost): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88 — that's what actual usage costs at this scale, not a fee anyone charges you.
 
 **Do I need to know Python to use this?**
 > You need to be comfortable running a few CLI commands and editing a `.env` file (see [Setup](#️-setup)). Day-to-day use afterward is entirely in Google Sheets.

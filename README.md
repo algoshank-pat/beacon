@@ -82,17 +82,12 @@ Stays cheap because: company lookups only use free data sources (left blank if n
 
 ## ✨ Key Features
 
-- **Five job sources**: broad keyword discovery via Adzuna, plus direct polling of Greenhouse, Lever, Ashby, and SmartRecruiters for companies you specifically track — no query-time filtering needed on the targeted side, every posting is pulled and filtered locally
-- **Self-onboarding companies**: type a company name into a `SEED` row on the Sheet and the pipeline guesses and verifies a real job-board slug across all four ATS platforms automatically — no manual API digging
-- **Three-tier visa classification**: regex → free keyword pre-check → Haiku, cheapest first
-- **Live-editable filter criteria**: role/tech keyword include-lists, title excludes, seniority, location, posted-date window, company priority tier — all in a SQLite table, editable without touching code
-- **Fit scoring on demand, not by default**: Claude scores a job against your resume only when *you* flag it `Go Score` on the Sheet — never runs against the whole backlog automatically
-- **Free company enrichment**: employee count, funding stage, HQ, revenue — from two free-tier APIs only, with zero LLM fallback (a field just stays blank rather than ever costing money to fill in)
-- **US location resolution** from messy free-text (`"US-CA-Menlo Park"`, bare city names, county-only strings) against public Census reference data — no geocoding API
-- **AWS/GCP/Azure detection** from posting text, with a refresh pass for postings whose source truncates the description
-- **Dead-link detection**: postings that get pulled after you've already seen them get automatically evicted from the Sheet, not left as a broken link
-- **Google Sheets as the entire UI**: notification, approval, and status tracking are all native Sheets features — no dashboard, no login, no separate app to check
-- **Runs unattended** via a single locked, crash-recovering scheduler process — main pipeline 3x/day, fit-scoring and company enrichment on their own offset schedules, an approval poller every 30 minutes
+- **5 job sources** — Adzuna plus direct polling of 4 ATS platforms
+- **3-tier visa detection** — free checks first, AI only when genuinely ambiguous
+- **Self-onboarding** — type a company name into a `SEED` row, done
+- **Live-editable filters** — keywords, seniority, location, all in a table, no code
+- **On-demand fit scoring** — AI runs only when you flag `Go Score`
+- **Google Sheets as the UI** — no dashboard, no login, nothing new to learn
 
 ---
 

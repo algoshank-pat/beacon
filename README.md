@@ -69,11 +69,49 @@ Fair question. LinkedIn Premium doesn't solve the one thing that costs visa hold
 | | **LinkedIn Premium** | **Beacon** |
 |---|---|---|
 | Detects visa sponsorship | ❌ Not a feature — you read every posting yourself | ✅ Auto-classified, restrictions caught automatically |
-| Cost | ~$30–$40/month, forever | Free software — real lifetime AI cost so far: **$8.88** across 137,000+ postings |
+| Cost | ~$30–$40/month, forever | Free software — real lifetime AI cost so far: **$8.88** (see below) |
 | Filter logic | Black-box "match" score | Every rule lives in a table you can read and edit |
 | Privacy & tracking | Public "Open to Work" status; only sees LinkedIn's own Apply flow | Fully private, your own Sheet — tracks any job however you actually applied |
 
 **The short version**: it replaces the one feature visa holders need most — "will this company even consider me" — at a fraction of a month's subscription.
+
+## 💰 Savings — Time & Cost
+
+Real numbers from this project's own history, not an estimate — **software is free**; the $8.88 is real AI usage paid directly to Anthropic, not a price for this project:
+
+| Metric | Value |
+|---|---|
+| Total postings ever ingested | **137,318** |
+| Actually reached your Sheet, worth your time (2.4%) | **3,355** |
+| Caught as visa-restricted before you wasted time on them | **577** |
+| Companies tracked | **2,674** |
+| **Total AI spend, ever** | **$8.88** |
+
+Stays cheap because: company lookups only use free data sources (left blank if neither has an answer, never a paid fallback); resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching — AI only steps in for the small remainder where the wording is genuinely unclear.
+
+**What that restriction language actually looks like** — real phrasing caught in live postings, usually buried a few paragraphs in, not in the title:
+
+> *"We are unable to sponsor H-1B, F-1 OPT, and STEM OPT extension at this time."*
+> *"This role is not open to visa sponsorship."*
+> *"This position requires a government security clearance; you must be a US citizen for consideration."*
+
+---
+
+## ✨ Key Features
+
+- **Five job sources**: broad keyword discovery via Adzuna, plus direct polling of Greenhouse, Lever, Ashby, and SmartRecruiters for companies you specifically track — no query-time filtering needed on the targeted side, every posting is pulled and filtered locally
+- **Self-onboarding companies**: type a company name into a `SEED` row on the Sheet and the pipeline guesses and verifies a real job-board slug across all four ATS platforms automatically — no manual API digging
+- **Three-tier visa classification**: regex → free keyword pre-check → Haiku, cheapest first
+- **Live-editable filter criteria**: role/tech keyword include-lists, title excludes, seniority, location, posted-date window, company priority tier — all in a SQLite table, editable without touching code
+- **Fit scoring on demand, not by default**: Claude scores a job against your resume only when *you* flag it `Go Score` on the Sheet — never runs against the whole backlog automatically
+- **Free company enrichment**: employee count, funding stage, HQ, revenue — from two free-tier APIs only, with zero LLM fallback (a field just stays blank rather than ever costing money to fill in)
+- **US location resolution** from messy free-text (`"US-CA-Menlo Park"`, bare city names, county-only strings) against public Census reference data — no geocoding API
+- **AWS/GCP/Azure detection** from posting text, with a refresh pass for postings whose source truncates the description
+- **Dead-link detection**: postings that get pulled after you've already seen them get automatically evicted from the Sheet, not left as a broken link
+- **Google Sheets as the entire UI**: notification, approval, and status tracking are all native Sheets features — no dashboard, no login, no separate app to check
+- **Runs unattended** via a single locked, crash-recovering scheduler process — main pipeline 3x/day, fit-scoring and company enrichment on their own offset schedules, an approval poller every 30 minutes
+
+---
 
 ### AI touches exactly two decisions in this entire pipeline
 
@@ -89,8 +127,6 @@ Manual by design (DOL blocks automated downloads): grab the quarterly `.xlsx` fr
 *(Full details — file format, matching logic, multi-year merging, real test numbers — in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md).)*
 
 Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved.
-
-> **One word, "Go Score", is the only thing in this entire pipeline that ever spends an AI token on your behalf. Everything else, including visa screening, either runs on free pattern matching or doesn't run at all until you ask.**
 
 Here's exactly how each of those two decisions gets made:
 
@@ -129,23 +165,7 @@ The resume-fit scoring step (Claude Sonnet) never runs on its own. It's controll
 | `Manual Scored` | You | Your own judgment call, no AI involved at all |
 | `Reject` | You | Removes the row, no AI involved |
 
-There's no "score everything" button, and no background job silently scoring your whole backlog. Every single Sonnet call in this pipeline exists because you typed `Go Score` into one specific cell. That's what "AI where it matters, automation everywhere else" actually looks like in practice, not just as a slogan.
-
----
-
-## ✨ Key Features
-
-- **Five job sources**: broad keyword discovery via Adzuna, plus direct polling of Greenhouse, Lever, Ashby, and SmartRecruiters for companies you specifically track — no query-time filtering needed on the targeted side, every posting is pulled and filtered locally
-- **Self-onboarding companies**: type a company name into a `SEED` row on the Sheet and the pipeline guesses and verifies a real job-board slug across all four ATS platforms automatically — no manual API digging
-- **Three-tier visa classification**: regex → free keyword pre-check → Haiku, cheapest first (see Savings)
-- **Live-editable filter criteria**: role/tech keyword include-lists, title excludes, seniority, location, posted-date window, company priority tier — all in a SQLite table, editable without touching code
-- **Fit scoring on demand, not by default**: Claude scores a job against your resume only when *you* flag it `Go Score` on the Sheet — never runs against the whole backlog automatically
-- **Free company enrichment**: employee count, funding stage, HQ, revenue — from two free-tier APIs only, with zero LLM fallback (a field just stays blank rather than ever costing money to fill in)
-- **US location resolution** from messy free-text (`"US-CA-Menlo Park"`, bare city names, county-only strings) against public Census reference data — no geocoding API
-- **AWS/GCP/Azure detection** from posting text, with a refresh pass for postings whose source truncates the description
-- **Dead-link detection**: postings that get pulled after you've already seen them get automatically evicted from the Sheet, not left as a broken link
-- **Google Sheets as the entire UI**: notification, approval, and status tracking are all native Sheets features — no dashboard, no login, no separate app to check
-- **Runs unattended** via a single locked, crash-recovering scheduler process — main pipeline 3x/day, fit-scoring and company enrichment on their own offset schedules, an approval poller every 30 minutes
+There's no "score everything" button and no background job silently scoring your whole backlog — just this one dropdown, row by row.
 
 ---
 
@@ -189,28 +209,6 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 | **Company data** | Financial Modeling Prep + StartupHub.ai + TinyFish Search (all free tier) |
 | **Location resolution** | US Census county/place reference data (bundled, public domain) |
 | **HTTP** | `requests`, with retry/backoff on rate limits and transient errors |
-
----
-
-## 💰 Savings — Time & Cost
-
-Real numbers from this project's own history, not an estimate — **software is free**; the $8.88 is real AI usage paid directly to Anthropic, not a price for this project:
-
-| Metric | Value |
-|---|---|
-| Total postings ever ingested | **137,318** |
-| Actually reached your Sheet, worth your time (2.4%) | **3,355** |
-| Caught as visa-restricted before you wasted time on them | **577** |
-| Companies tracked | **2,674** |
-| **Total AI spend, ever** | **$8.88** |
-
-Stays cheap because: company lookups only use free data sources (left blank if neither has an answer, never a paid fallback); resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching — AI only steps in for the small remainder where the wording is genuinely unclear.
-
-**What that restriction language actually looks like** — real phrasing caught in live postings, usually buried a few paragraphs in, not in the title:
-
-> *"We are unable to sponsor H-1B, F-1 OPT, and STEM OPT extension at this time."*
-> *"This role is not open to visa sponsorship."*
-> *"This position requires a government security clearance; you must be a US citizen for consideration."*
 
 ---
 
@@ -373,11 +371,8 @@ beacon/
 **Does this scrape LinkedIn?**
 > No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it — every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.
 
-**Is this a website or a service I sign up for?**
-> No. There's no server, no account, no sign-up anywhere. You clone the code and run it as a Python program on your own laptop, using your own accounts for every external service it talks to (Google Sheets, Anthropic, Adzuna, etc.). This project doesn't host anything and doesn't have a backend that could see your data even if it wanted to.
-
-**Is my data private?**
-> Yes, entirely. It runs locally on your own machine against your own SQLite database and your own Google Sheets. Nothing is sent anywhere except the API calls you configure yourself (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub/TinyFish), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
+**Is this a website or a service I sign up for, and is my data private?**
+> Neither, and yes. No server, no account, no sign-up — you clone the code and run it entirely on your own machine, using your own accounts for every external service it talks to. Nothing is sent anywhere except the API calls you configure yourself (Google Sheets, Anthropic, Adzuna, the ATS platforms, FMP/StartupHub/TinyFish), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
 
 **How much does it actually cost to run?**
 > The software itself is free — there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Savings](#-savings--time--cost): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88 — that's what actual usage costs at this scale, not a fee anyone charges you.

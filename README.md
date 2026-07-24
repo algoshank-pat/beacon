@@ -37,6 +37,8 @@
 - H-1B holders, F-1 OPT/STEM-OPT students, and anyone else whose job search has to filter for visa sponsorship
 - Anyone tired of discovering a sponsorship dead-end three paragraphs into a job description, after already spending time on it
 - Job seekers in any keyword-matchable field, not just tech — the role/tech keyword lists are fully yours to redefine
+- Anyone who doesn't want to spend money on AI unnecessarily
+- Anyone who'd rather track their job search in their own private Google Sheet than log into yet another dashboard
 - Builders curious what a real, production Claude Code build looks like end-to-end, bugs and all (see [`RUNBOOK.md`](./RUNBOOK.md))
 
 ---

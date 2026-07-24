@@ -64,28 +64,21 @@ Beacon was built to remove that specific waste, for close to $0:
 
 ## 💸 Why not just pay for LinkedIn Premium?
 
-Fair question — here's the honest comparison, not a sales pitch. LinkedIn Premium Career is genuinely useful for some things (InMail credits, "who viewed your profile," LinkedIn Learning). It just doesn't solve the actual problem that costs visa holders the most time:
+Fair question. LinkedIn Premium doesn't solve the one thing that costs visa holders the most time:
 
-| | **LinkedIn Premium Career** | **Beacon** |
+| | **LinkedIn Premium** | **Beacon** |
 |---|---|---|
-| Detects visa-sponsorship restrictions before you apply | ❌ Not a feature at all — you still read every posting yourself | ✅ Every posting auto-classified `Sponsored`/`No sponsor`/`No mention`/`Unclear`, 577 restricted postings caught automatically in this project's own history |
-| Cost | ~$29.99–$39.99/month, forever, whether you're actively searching or not | **Free software.** Only real cost is your own AI usage, paid directly to Anthropic — **$8.88 total** is this project's own real lifetime usage across 137,000+ postings (see [Cost Model](#-cost-model--ai-only-when-its-actually-needed)) |
-| Job sources | LinkedIn's own listings + LinkedIn's feed-ranking algorithm decides what you see | Adzuna broad search + direct polling of 4 ATS platforms (Greenhouse/Lever/Ashby/SmartRecruiters) — you see everything currently open at a company you track, not what an engagement algorithm surfaces |
-| Filter logic | A black-box "job match" score you can't inspect or edit | Every keyword, threshold, and exclusion rule lives in a plain SQLite table you can read and edit directly — no guessing why something did or didn't match |
-| Ongoing effort | You still manually search, scroll, and re-check the same companies | Runs unattended 3x/day; results land in a Sheet you already know how to use, with dead postings auto-removed |
-| Browsing, tracking, and scoring at volume | A feed, one posting at a time, not built for scanning or sorting hundreds of them | A spreadsheet: filter, sort, and score across thousands of rows at once, exactly the tool humans already use for tracking anything at scale. It's also entirely your own personal copy, not a shared platform |
-| "Applicant insights" / InMail | Tells you how you compare to other applicants, lets you message recruiters — doesn't tell you upfront whether they'll sponsor at all | N/A by design — the goal is never wasting an InMail or an application on a company that was never going to sponsor in the first place |
-| Recruiter noise | Flipping on "Open to Work" to search more effectively also broadcasts your status publicly, and the flood of unsolicited recruiter emails/InMails that follows is a well-known trade-off | You search and track everything privately in your own Sheet. No public status to flip on, so no flood to deal with in the first place |
-| Application tracking scope | Only tracks applications made through LinkedIn's own Apply flow — but most real jobs come through referrals, recruiters, or applying directly on a company's site, none of which LinkedIn ever sees | The `Application Status` column tracks any job you choose to track, however you actually applied. It's just a field on your own row, not tied to any platform's apply button |
+| Detects visa sponsorship | ❌ Not a feature — you read every posting yourself | ✅ Auto-classified, restrictions caught automatically |
+| Cost | ~$30–$40/month, forever | Free software — real lifetime AI cost so far: **$8.88** across 137,000+ postings |
+| Filter logic | Black-box "match" score | Every rule lives in a table you can read and edit |
+| Privacy & tracking | Public "Open to Work" status; only sees LinkedIn's own Apply flow | Fully private, your own Sheet — tracks any job however you actually applied |
 
-**The honest summary**: Beacon doesn't replace everything LinkedIn Premium does (it won't teach you a course or show you profile-view analytics). It replaces the one feature visa holders actually need most — "will this company even consider me" — which LinkedIn has never built, at roughly 2% of a single month's subscription cost, running for as long as your job search takes.
+**The short version**: it replaces the one feature visa holders need most — "will this company even consider me" — at a fraction of a month's subscription.
 
 ### AI touches exactly two decisions in this entire pipeline
 
-1. **Visa fit** — does this posting's own text rule you out on sponsorship? Only asked when free keyword/regex checks genuinely can't tell.
-2. **Job fit** — does this posting match your resume well enough to be worth pursuing? Only asked when *you* type `Go Score` (short for "go score job fit") into that specific row's **My Decision** cell.
-
-**Important scope note on visa fit**: the automatic per-posting check above only ever reads that one job posting's own text, title, location, and description. "Sponsored" there means "this posting's own words say they'll sponsor," not "this company has a track record of sponsoring." Those are genuinely different signals — see the next section for the second one.
+1. **Visa fit** — does *this posting's own text* rule out sponsorship? Only asked when free keyword/regex checks can't tell. (Posting text only, not company history — see the next section for that.)
+2. **Job fit** — does this posting match your resume? Only asked when you type `Go Score` into that row's **My Decision** cell.
 
 ### Real historical sponsorship data (DOL LCA), separate from posting-text classification
 

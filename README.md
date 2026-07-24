@@ -186,7 +186,7 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 | **Tracking / UI / Notification** | Google Sheets via `gspread` (service account auth) |
 | **LLM** | Anthropic Claude — Haiku 4.5 (visa classification), Sonnet 5 (fit scoring) |
 | **Job sources** | Adzuna API, Greenhouse, Lever, Ashby, SmartRecruiters (all public/free) |
-| **Company data** | Financial Modeling Prep + StartupHub.ai (both free tier) |
+| **Company data** | Financial Modeling Prep + StartupHub.ai + TinyFish Search (all free tier) |
 | **Location resolution** | US Census county/place reference data (bundled, public domain) |
 | **HTTP** | `requests`, with retry/backoff on rate limits and transient errors |
 
@@ -221,6 +221,7 @@ Stays cheap because: company lookups only use free data sources (left blank if n
 - A free [Adzuna developer account](https://developer.adzuna.com)
 - A free [Anthropic API key](https://console.anthropic.com)
 - A free [Financial Modeling Prep](https://financialmodelingprep.com) key and [StartupHub.ai](https://startuphub.ai) key
+- Optional: a free [TinyFish](https://agent.tinyfish.ai/api-keys) key — a third, best-effort industry source for companies the two above miss
 - A Google Cloud **service account** (not OAuth) shared as an Editor on two Google Sheets you create yourself — one for active matches ("Beacon"), one for excluded jobs ("Job Log")
 
 Don't have these yet? See the [Appendix](#-appendix-getting-each-api-key) for step-by-step instructions for every single one.
@@ -368,7 +369,7 @@ beacon/
 > No. There's no server, no account, no sign-up anywhere. You clone the code and run it as a Python program on your own laptop, using your own accounts for every external service it talks to (Google Sheets, Anthropic, Adzuna, etc.). This project doesn't host anything and doesn't have a backend that could see your data even if it wanted to.
 
 **Is my data private?**
-> Yes, entirely. It runs locally on your own machine against your own SQLite database and your own Google Sheets. Nothing is sent anywhere except the API calls you configure yourself (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
+> Yes, entirely. It runs locally on your own machine against your own SQLite database and your own Google Sheets. Nothing is sent anywhere except the API calls you configure yourself (Adzuna, the ATS platforms, Anthropic, FMP/StartupHub/TinyFish), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
 
 **How much does it actually cost to run?**
 > The software itself is free — there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Savings](#-savings--time--cost): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88 — that's what actual usage costs at this scale, not a fee anyone charges you.
@@ -453,6 +454,12 @@ Because the app writes as the service account's own distinct identity (not you),
 1. Go to [startuphub.ai](https://startuphub.ai) and sign up for a free account
 2. Get your API key from your account dashboard
 3. Copy it into `.env`
+
+### TinyFish Search API (`TINYFISH_API_KEY`) — optional
+A third, best-effort `industry` source, only queried for companies FMP and StartupHub both already checked and left blank. Free — TinyFish's Search API doesn't use credits, unlike their Agent/Browser APIs.
+1. Go to [agent.tinyfish.ai/api-keys](https://agent.tinyfish.ai/api-keys) and grab a free key
+2. Copy it into `.env` as `TINYFISH_API_KEY`
+3. Skip this entirely if you don't want it — `enrich-companies` runs fine without it, it just won't attempt this third pass
 
 ### DOL LCA disclosure data (no signup, no API key — manual download)
 This is the source behind the `DOL LCA Match`/`Last Sponsored` columns (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca) above for what those fields mean and, just as important, what they *don't* guarantee). Unlike everything else in this Appendix, there's no account and no key — it's public U.S. Department of Labor data — but it does need a bit more manual care to keep current.

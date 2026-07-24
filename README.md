@@ -2,6 +2,7 @@
 
 **In plain words:**
 - Beacon hunts for jobs so you don't have to. Just tell it what you're after.
+- Got a favorite company? Type its name into a `SEED` row on the Sheet, and Beacon tracks every opening there automatically.
 - It sniffs out which companies will actually sponsor a work visa (H-1B), before you waste a click.
 - Results land in a Google Sheet you already know how to use. Check it from your phone, no new app, no new password to forget.
 - Runs on your own computer. Private by design. Nobody's watching, not even us.

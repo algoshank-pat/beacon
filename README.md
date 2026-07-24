@@ -80,21 +80,13 @@ Fair question. LinkedIn Premium doesn't solve the one thing that costs visa hold
 1. **Visa fit** — does *this posting's own text* rule out sponsorship? Only asked when free keyword/regex checks can't tell. (Posting text only, not company history — see the next section for that.)
 2. **Job fit** — does this posting match your resume? Only asked when you type `Go Score` into that row's **My Decision** cell.
 
-### Real historical sponsorship data (DOL LCA), separate from posting-text classification
+### Real historical sponsorship data (DOL LCA)
 
-This is a second, distinct signal, and it's real government data, not another guess from posting text. The Department of Labor's Office of Foreign Labor Certification (OFLC) publishes quarterly LCA (H-1B, H-1B1, E-3) disclosure data — every employer that filed, and when. Matched against your own tracked companies, it answers "has this company actually sponsored before, and when," which no posting's own text can tell you.
+A second, separate signal: real DOL government filing data on which companies have actually sponsored before — not another guess from posting text. A match means **"Likely work visa sponsor,"** a positive historical signal, not a guarantee for any specific posting.
 
-A match means **"Likely work visa sponsor"** — a positive historical signal, not a guarantee. A company that filed an LCA before has, at minimum, gone through the process once; it says nothing about whether *this specific posting* will sponsor. A company can have a strong filing history and still post a req that explicitly says no sponsorship (different team, changed policy, one recruiter's mistake) — read the individual posting's own Visa Flag too, don't rely on a company-level match alone. And the absence of a match doesn't mean a company won't sponsor — it may simply have never needed to yet, or its filings may be under a different legal entity name.
+Manual by design (DOL blocks automated downloads): grab the quarterly `.xlsx` from the [OFLC Performance Data page](https://www.dol.gov/agencies/eta/foreign-labor/performance), then run `python -m app.cli lca-enrich <path>`. Runs alongside the Visa Flag check above, not instead of it — doesn't reduce its AI usage.
 
-**This isn't automated** — DOL's site blocks unattended downloads (confirmed live: this project's own automated browser tool and a plain HTTP request were both blocked), so it's a manual, one-time-per-quarter step:
-
-1. Go to the [OFLC Performance Data page](https://www.dol.gov/agencies/eta/foreign-labor/performance), expand "Disclosure Data," and download the current quarter's LCA `.xlsx` file (it's real, ~137MB, ~1M rows). Each file is cumulative *within its own federal fiscal year* (Oct 1 – Sep 30), so downloading more than one quarter of the same fiscal year adds nothing — for real multi-year history, download one file per fiscal year you want covered (typically that year's last/Q4 release)
-2. Run `python -m app.cli lca-enrich <path-to-file> [<path-to-another-file> ...]` — pass as many files as you downloaded in one call; it merges them, keeping the most recent filing date per employer across all of them
-3. It matches every tracked company by name and updates two new Sheet columns, `DOL LCA Match` and `Last Sponsored`, plus the underlying `companies.dol_lca_employer_name`/`last_lca_certified_date` columns
-
-Same name-matching risk as everywhere else in this pipeline (see the LinkedIn Premium comparison and Savings section above) — real-world validation against this project's own 2,682-company table found 223 matches from a single quarter with zero false positives spotted, including in the highest-collision-risk short-name group, but this isn't a guarantee for every name.
-
-**This signal is entirely separate from the Visa Flag/Haiku classification above, and doesn't reduce its AI usage** — a company-level LCA match isn't currently used to skip or shortcut the per-posting Haiku check, since a historical filing says nothing about what *this specific posting's own text* says. The two run side by side, not one instead of the other.
+*(Full details — file format, matching logic, multi-year merging, real test numbers — in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md).)*
 
 Everything else, discovery, deduplication, keyword matching, location resolution, salary extraction, company enrichment, is plain code with zero AI involved.
 
@@ -364,7 +356,7 @@ beacon/
 ## ❓ FAQ
 
 **Can you get me a job, or tell me which companies sponsor visas?**
-> No. See the [Disclaimer](#️-disclaimer) below — there's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification)) — that's a positive historical indicator, not a guarantee about any specific role.
+> No. See the [Disclaimer](#️-disclaimer) below — there's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca)) — that's a positive historical indicator, not a guarantee about any specific role.
 
 **Can I use more than one resume?**
 > Not yet — a real, known limitation. Fit-scoring always reads a single file (`resumes/base_resume.md`, falling back to `.txt` then `.docx`, first match wins), with no way to select a different one per job or per role type. If you want to score against different resumes for different kinds of roles, today's only workaround is manually swapping the file between runs.
@@ -463,7 +455,7 @@ Because the app writes as the service account's own distinct identity (not you),
 3. Copy it into `.env`
 
 ### DOL LCA disclosure data (no signup, no API key — manual download)
-This is the source behind the `DOL LCA Match`/`Last Sponsored` columns (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification) above for what those fields mean and, just as important, what they *don't* guarantee). Unlike everything else in this Appendix, there's no account and no key — it's public U.S. Department of Labor data — but it does need a bit more manual care to keep current.
+This is the source behind the `DOL LCA Match`/`Last Sponsored` columns (see [Real historical sponsorship data](#real-historical-sponsorship-data-dol-lca) above for what those fields mean and, just as important, what they *don't* guarantee). Unlike everything else in this Appendix, there's no account and no key — it's public U.S. Department of Labor data — but it does need a bit more manual care to keep current.
 
 **Prerequisites**
 - Just a regular web browser. No signup, no key, no cost — this is public government data
@@ -503,7 +495,7 @@ MIT — see [LICENSE](./LICENSE).
 > 1. **Not legal or immigration advice.** I'm not a recruiter, employer, or immigration attorney, and nothing here guarantees any company will actually sponsor you.
 > 2. **The "Likely work visa sponsor" signal is not a promise.** It's a positive historical indicator from public government filing data — a company can have a strong filing history and still not sponsor for a specific role.
 
-Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, and doesn't maintain any personally curated list of "companies that sponsor visas" — there is no such list. The one exception is the [DOL LCA match](#real-historical-sponsorship-data-dol-lca-separate-from-posting-text-classification), which is real public government filing data, not a curated opinion — and even that is a "likely sponsors" positive indicator, never a guarantee, since a company's past filing says nothing about whether this specific posting will sponsor. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
+Beacon classifies what *one specific job posting's own text* says about sponsorship, nothing more. It doesn't offer you a job, and doesn't maintain any personally curated list of "companies that sponsor visas" — there is no such list. The one exception is the [DOL LCA match](#real-historical-sponsorship-data-dol-lca), which is real public government filing data, not a curated opinion — and even that is a "likely sponsors" positive indicator, never a guarantee, since a company's past filing says nothing about whether this specific posting will sponsor. Every classification comes from analyzing that posting's text at the moment it was ingested, the same way you'd read it yourself, just automated. For any real decision about your immigration status, talk to a qualified immigration attorney, not this tool or its output.
 
 ---
 

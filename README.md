@@ -11,7 +11,7 @@
 
 🧠 **On-demand AI.** AI only runs when you ask. Drop your resume into your local `resumes/` folder, flag a row with `Go Score`, and Beacon scores how well that job matches it. You pay literal pennies straight to Anthropic or Gemini (whichever you set up) on your own account, not to us.
 
-🔒 **100% Private.** The software runs locally on your machine. No external servers, no third-party databases, and absolutely nobody watching your data.
+🔒 **100% Private, and free and open-source (FOSS).** The software runs locally on your machine, and every line of it is public on GitHub, so nothing is hidden. No external servers, no third-party databases, and absolutely nobody watching your data.
 
 ## 📸 See it in action
 

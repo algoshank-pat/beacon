@@ -2,7 +2,7 @@
 
 **In plain words:**
 - Your Google Sheet is your job tracker. Beacon is the personal assistant that keeps it full, running on your own laptop.
-- Tell it the job titles you want. Matching postings from job sites land on your Sheet automatically, ready for you to track and manage.
+- Tell it the job titles you want. Matching postings from job sites land on your Googlr Sheet automatically, ready for you to track and manage.
 - It checks every posting for you: flags which companies actually sponsor a work visa (H-1B), before you ever have to read a job description.
 - Got a favorite company that's not on your Google Sheet? Add a new row, type the name, mark it `SEED`. Beacon takes it from there.
 - AI only runs when you ask. Flag a job and Beacon scores how well it fits your resume, for about a cent.

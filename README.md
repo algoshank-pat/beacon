@@ -9,7 +9,7 @@
 
 🌱 **Onboard companies instantly.** Want to track a specific company? Just type the name in a new row and tag it `SEED`, and Beacon sets up the automated tracking for it.
 
-🧠 **On-demand AI.** AI only runs when you ask. Drop your resume into your local `resumes/` folder, flag a row on Google Sheets ("Go Score"), and Beacon scores how well that job matches it, for literal pennies paid straight to Anthropic or Gemini (whichever you set up) on your own account, not to us.
+🧠 **On-demand AI.** AI only runs when you ask. Drop your resume into your local `resumes/` folder, flag a row with `Go Score`, and Beacon scores how well that job matches it. You pay literal pennies straight to Anthropic or Gemini (whichever you set up) on your own account, not to us.
 
 🔒 **100% Private.** The software runs locally on your machine. No external servers, no third-party databases, and absolutely nobody watching your data.
 
@@ -33,9 +33,9 @@
 
 ## 🎯 Who this is for, and why
 
-👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay Anthropic or Gemini (on your own account) for AI you don't need, or want your search tracked in your own private Sheet.
+👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship. Especially if you're tired of dead-end postings, don't want to pay for AI you don't need, or want your search tracked in your own private Sheet.
 
-🎯 **Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's zero dollars if you don't invoke the AI, and pennies if you do (see [Savings](#-time-and-cost-savings)); **free, permanently, is the goal.**
+🎯 **Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's zero dollars if you don't use the AI, and pennies if you do (see [Savings](#-time-and-cost-savings)). **Free, permanently, is the goal.**
 
 ## 💸 Why not just pay for LinkedIn Premium?
 
@@ -53,7 +53,7 @@ Fair question. LinkedIn Premium doesn't solve the one thing that costs visa hold
 
 ## 💰 Time and Cost Savings
 
-Real numbers from this project's own history, not an estimate. **Software is free**; any AI usage is paid directly to Anthropic or Gemini (whichever you configure), not to this project:
+Real numbers from this project's own history, not an estimate. **Software is free.** Any AI usage is paid directly to Anthropic or Gemini (whichever you configure), not to this project:
 
 | Metric | Value |
 |---|---|
@@ -65,7 +65,7 @@ Real numbers from this project's own history, not an estimate. **Software is fre
 
 📌 For reference, this project's own real lifetime spend so far, across all 137,318 postings above and several weeks of daily use, is **$8.88 total**.
 
-💡 **Stays cheap because:** company lookups only use free data sources (left blank if neither has an answer, never a paid fallback); resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching, with AI stepping in only for the small remainder where the wording is genuinely unclear.
+💡 **Stays cheap because:** company lookups only use free data sources, left blank instead of falling back to a paid one; resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching, with AI stepping in only for the small, genuinely unclear remainder.
 
 **What that restriction language actually looks like** (real phrasing caught in live postings, usually buried a few paragraphs in, not in the title):
 

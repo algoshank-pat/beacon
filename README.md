@@ -97,7 +97,7 @@ AI makes exactly two decisions in this pipeline. Everything else is free, determ
 
 🛡️ **Visa check**: does this posting rule out sponsorship? Automatic on every job; free pattern-matching first, AI only for the genuinely unclear remainder.
 
-🎯 **Fit score**: does this job match your resume? Only when you type `Go Score` into that row, never automatic, never your whole backlog.
+🎯 **Fit score**: does this job match your resume? Only when you type `Go Score` into that row, never automatic, and never every job already sitting in your Sheet.
 
 🏛️ A third signal sits alongside these two, but isn't AI at all: real **DOL government filing data** on which companies have sponsored before, a "Likely work visa sponsor" flag, not a guarantee.
 

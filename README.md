@@ -89,7 +89,7 @@ AI makes exactly two decisions in this pipeline. Everything else is free, determ
 
 🏛️ A third signal sits alongside these two, but isn't AI at all: real **DOL government filing data** on which companies have sponsored before, a "Likely work visa sponsor" flag, not a guarantee.
 
-🔀 **Both AI decisions can run on Claude (default) or Gemini** — add a `GEMINI_API_KEY` to `.env` instead of an Anthropic one and it's picked up automatically; set `LLM_PROVIDER=gemini` explicitly only if you have both keys set and want to force Gemini. Same prompts, same forced JSON schema, same behavior either way; only which provider gets billed changes.
+🔀 **Use Claude (default) or Gemini.** Add a `GEMINI_API_KEY` to `.env`.
 
 *(Full mechanics, including the pipeline diagram, exactly what the AI sees, and every My Decision state, plus how to run the DOL LCA check, are in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).)*
 
@@ -130,7 +130,7 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 | **Scheduling** | APScheduler (`BlockingScheduler`, single-instance file lock) |
 | **Database** | SQLite, WAL mode |
 | **Tracking / UI / Notification** | Google Sheets via `gspread` (service account auth) |
-| **LLM** | Anthropic Claude (default): Haiku 4.5 (visa classification), Sonnet 5 (fit scoring) — or Gemini: Flash-Lite + Pro, via `LLM_PROVIDER=gemini` |
+| **LLM** | Anthropic Claude (default): Haiku 4.5 (visa classification), Sonnet 5 (fit scoring), or Gemini: Flash-Lite + Pro, via `LLM_PROVIDER=gemini` |
 | **Job sources** | Adzuna API, Greenhouse, Lever, Ashby, SmartRecruiters (all public/free) |
 | **Company data** | Financial Modeling Prep + StartupHub.ai + TinyFish Search (all free tier) |
 | **Location resolution** | US Census county/place reference data (bundled, public domain) |
@@ -331,7 +331,7 @@ Step-by-step for every credential `.env.example` asks for. No screenshots (UIs c
 Same two jobs (visa classification, fit scoring), same forced-JSON-schema behavior, different provider billed.
 1. Go to [aistudio.google.com](https://aistudio.google.com) and sign in with a Google account
 2. Click **Get API Key → Create API key** (no credit card required for the free tier)
-3. Copy the key into `.env` as `GEMINI_API_KEY` — that's it, no `LLM_PROVIDER` line needed. If it's the only one of the two keys set, Gemini is picked automatically; `LLM_PROVIDER=gemini` is only needed to force Gemini when both keys are set.
+3. Copy the key into `.env` as `GEMINI_API_KEY`. That's it, no `LLM_PROVIDER` line needed. If it's the only one of the two keys set, Gemini is picked automatically; `LLM_PROVIDER=gemini` is only needed to force Gemini when both keys are set.
 
 ### Adzuna (`ADZUNA_APP_ID` / `ADZUNA_APP_KEY`)
 1. Go to [developer.adzuna.com](https://developer.adzuna.com) and register for a free account

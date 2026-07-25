@@ -5,12 +5,13 @@ from app.sheets import MAIN_SHEET_COLUMNS, JOB_ID_COL_INDEX
 from app.visa_scan import (
     VISA_FLAG_NO_MENTION,
     VISA_FLAG_PENDING,
+    gemini_classify,
     haiku_classify,
     mentions_sponsorship_keywords,
     regex_classify,
     run_visa_scan,
 )
-from tests.fakes import FakeWorksheet
+from tests.fakes import FakeGeminiClient, FakeWorksheet
 
 
 @pytest.fixture(autouse=True)
@@ -116,6 +117,31 @@ def test_haiku_classify_parses_structured_response():
     assert result["visa_flag"] == "restricted"
     assert usage["input_tokens"] == 100
     assert usage["output_tokens"] == 20
+
+
+def test_gemini_classify_parses_structured_response():
+    client = FakeGeminiClient('{"visa_flag": "restricted", "snippet": "must have work authorization"}')
+    result, usage = gemini_classify(client, "some ambiguous JD text")
+    assert result["visa_flag"] == "restricted"
+    assert usage["input_tokens"] == 100
+    assert usage["output_tokens"] == 50
+
+
+def test_run_visa_scan_dispatches_to_gemini_when_configured(db_conn):
+    db_conn.execute(
+        "INSERT INTO jobs (title, url, description, status) VALUES "
+        "('SA', 'https://x/1', 'Ambiguous mention of visa policy, no clear regex match.', 'new')"
+    )
+    db_conn.commit()
+
+    client = FakeGeminiClient('{"visa_flag": "unclear", "snippet": "visa policy"}')
+    result = run_visa_scan(db_conn, client, {"require_visa_sponsorship": False}, provider="gemini")
+
+    assert result["haiku_calls"] == 1
+    assert len(client.models.calls) == 1
+    assert client.models.calls[0]["model"] == "gemini-3.5-flash-lite"
+    row = db_conn.execute("SELECT visa_flag FROM jobs").fetchone()
+    assert row["visa_flag"] == "unclear"
 
 
 def test_run_visa_scan_uses_regex_when_confident(db_conn):

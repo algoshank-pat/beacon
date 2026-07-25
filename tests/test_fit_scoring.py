@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from app.fit_scoring import FitScoreParseError, run_fit_scoring, score_job
+from app.fit_scoring import FitScoreParseError, gemini_score_job, run_fit_scoring, score_job
 from app.job_log import JOB_LOG_COLUMNS
 from app.sheets import (
     JOB_ID_COL_INDEX,
@@ -12,7 +12,7 @@ from app.sheets import (
     MY_DECISION_GO_SCORE,
     MY_DECISION_REJECT,
 )
-from tests.fakes import FakeAnthropicClient, FakeWorksheet
+from tests.fakes import FakeAnthropicClient, FakeGeminiClient, FakeWorksheet
 
 
 def _job_row(conn, **overrides):
@@ -62,6 +62,36 @@ def test_score_job_parses_structured_response():
     assert result["matched_skills"] == ["Kafka"]
     assert usage["input_tokens"] == 100
     assert usage["output_tokens"] == 50
+
+
+def test_gemini_score_job_parses_structured_response():
+    client = FakeGeminiClient(_score_response(85))
+    result, usage = gemini_score_job(client, "Solutions Architect", "Acme", "JD text", "Resume text")
+    assert result["score"] == 85
+    assert result["matched_skills"] == ["Kafka"]
+    assert usage["input_tokens"] == 100
+    assert usage["output_tokens"] == 50
+
+
+def test_gemini_score_job_raises_on_truncated_json():
+    truncated = '{"score": 72, "matched_skills": ["Kafka"'
+    client = FakeGeminiClient(truncated)
+    with pytest.raises(FitScoreParseError):
+        gemini_score_job(client, "Solutions Architect", "Acme", "JD text", "Resume text")
+
+
+def test_run_fit_scoring_dispatches_to_gemini_when_configured(db_conn):
+    job_id = _job_row(db_conn, url="https://x/1", status="new", visa_flag="sponsors")
+    main_ws = _requested_ws(job_id)
+
+    client = FakeGeminiClient(_score_response(70))
+    settings = {"fit_score_threshold": 60, "daily_token_budget": None, "monthly_token_budget": None}
+
+    result = run_fit_scoring(db_conn, client, "resume text", settings, main_ws=main_ws, provider="gemini")
+
+    assert result["scored"] == 1
+    assert len(client.models.calls) == 1
+    assert client.models.calls[0]["model"] == "gemini-2.5-pro"
 
 
 def test_run_fit_scoring_returns_empty_without_main_ws(db_conn):

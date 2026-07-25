@@ -44,6 +44,15 @@ from app.salary_extraction import fetch_job_page_text
 from app.sheets import remove_main_row, update_visa_flag
 
 HAIKU_MODEL = "claude-haiku-4-5"
+# Gemini's cheap tier, the Haiku-equivalent for this exact task. Originally
+# gemini-2.5-flash-lite (the GA/Standard tier, picked over Preview on the
+# reasoning that GA pricing/availability is more stable) -- confirmed live
+# against a real, newly-created API key that this reasoning was WRONG:
+# gemini-2.5-flash-lite AND gemini-2.5-flash both 404 with "no longer
+# available to new users", despite still being listed by
+# client.models.list(). gemini-3.5-flash-lite confirmed working live
+# against the same key with a normal small max_output_tokens budget.
+GEMINI_FLASH_MODEL = "gemini-3.5-flash-lite"
 
 # Internal jobs.visa_flag values for the two new states. Kept as short
 # internal tokens, same style as the existing "restricted"/"sponsors"/
@@ -216,6 +225,44 @@ def haiku_classify(
     return result, usage
 
 
+def gemini_classify(
+    client, description: str, title: str = "", location: str = ""
+) -> tuple[dict, dict]:
+    """Gemini equivalent of haiku_classify -- identical prompt and forced
+    JSON schema, identical (result, usage) return shape, so run_visa_scan's
+    provider dispatch can call either one without caring which it is."""
+    response = client.models.generate_content(
+        model=GEMINI_FLASH_MODEL,
+        contents=HAIKU_PROMPT.format(
+            title=title or "(unknown)",
+            location=location or "(unknown)",
+            description=description[:12000],
+        ),
+        config={
+            "response_mime_type": "application/json",
+            "response_json_schema": VISA_SCHEMA,
+            "temperature": 0,
+            "max_output_tokens": 256,
+        },
+    )
+    result = json.loads(response.text)
+    usage = {
+        "input_tokens": response.usage_metadata.prompt_token_count,
+        "output_tokens": response.usage_metadata.candidates_token_count,
+    }
+    return result, usage
+
+
+# Maps LLM_PROVIDER -> (classify_fn, model_name_for_cost_estimation). Both
+# classify_fns share the exact (client, description, title=, location=) ->
+# (result, usage) contract, so run_visa_scan's dispatch is a single lookup,
+# not a branch per provider.
+VISA_CLASSIFIERS = {
+    "anthropic": (haiku_classify, HAIKU_MODEL),
+    "gemini": (gemini_classify, GEMINI_FLASH_MODEL),
+}
+
+
 def run_visa_scan(
     conn: sqlite3.Connection,
     client,
@@ -224,7 +271,13 @@ def run_visa_scan(
     workflow_run_id: int | None = None,
     job_log_ws=None,
     main_ws=None,
+    provider: str = "anthropic",
 ) -> dict:
+    # `client` must already match `provider` (an anthropic.Anthropic client
+    # for "anthropic", a genai.Client for "gemini") -- see app.llm_provider,
+    # the one place that builds the right one from Settings.
+    classify, model_name = VISA_CLASSIFIERS.get(provider, (haiku_classify, HAIKU_MODEL))
+
     # Picks up never-scanned jobs AND jobs stuck at VISA_FLAG_PENDING from a
     # prior run whose Haiku call failed -- both get retried the same way.
     query = (
@@ -275,7 +328,7 @@ def run_visa_scan(
                     update_visa_flag(main_ws, job["id"], VISA_FLAG_PENDING)
 
                 try:
-                    result, usage = haiku_classify(
+                    result, usage = classify(
                         client, description, title=job["title"] or "", location=job["location"] or ""
                     )
                 except Exception as exc:  # noqa: BLE001 -- one bad call must not kill the rest of the batch
@@ -293,7 +346,7 @@ def run_visa_scan(
                 tokens_input, tokens_output = usage["input_tokens"], usage["output_tokens"]
                 total_input_tokens += tokens_input
                 total_output_tokens += tokens_output
-                total_cost += estimate_cost_usd(HAIKU_MODEL, tokens_input, tokens_output)
+                total_cost += estimate_cost_usd(model_name, tokens_input, tokens_output)
         else:
             regex_hits += 1
 

@@ -52,6 +52,7 @@ from app.filter_settings import get_filter_settings
 from app.fit_scoring import run_fit_scoring
 from app.ingest import run_ingestion
 from app.job_log import resolve_job_log_worksheet
+from app.llm_provider import LLMProviderError, build_llm_client
 from app.observability import finish_workflow_run, log_step, start_workflow_run
 from app.resume import ResumeNotFoundError, get_base_resume_text
 from app.seed_via_sheet import run_seed_via_sheet
@@ -108,20 +109,21 @@ def run_full_pipeline(settings: Settings | None = None) -> dict:
         errors["filter"] = str(exc)
 
     # --- visa-scan ---
-    if settings.anthropic_api_key:
+    try:
+        client = build_llm_client(settings)
+    except LLMProviderError as exc:
+        errors["visa_scan"] = str(exc)
+    else:
         try:
-            import anthropic
-
             from app.visa_scan import run_visa_scan
 
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
             conn = get_connection()
             try:
                 filter_settings = get_filter_settings(conn)
                 run_id = start_workflow_run(conn, "main_pipeline")
                 result = run_visa_scan(
                     conn, client, filter_settings, workflow_run_id=run_id,
-                    job_log_ws=job_log_ws, main_ws=main_ws,
+                    job_log_ws=job_log_ws, main_ws=main_ws, provider=settings.llm_provider,
                 )
                 finish_workflow_run(
                     conn, run_id, status="completed",
@@ -133,8 +135,6 @@ def run_full_pipeline(settings: Settings | None = None) -> dict:
                 conn.close()
         except Exception as exc:  # noqa: BLE001
             errors["visa_scan"] = str(exc)
-    else:
-        errors["visa_scan"] = "ANTHROPIC_API_KEY not set"
 
     # --- link check (Adzuna-sourced jobs app.ingest.detect_closed_jobs
     # can't cover -- see app.link_check) -- runs before sort + resync below
@@ -217,17 +217,16 @@ def run_scheduled_fit_scoring(settings: Settings | None = None) -> dict:
     over and gets picked up on a later run automatically."""
     settings = settings or get_settings()
 
-    if not settings.anthropic_api_key:
-        return {"error": "ANTHROPIC_API_KEY not set"}
+    try:
+        client = build_llm_client(settings)
+    except LLMProviderError as exc:
+        return {"error": str(exc)}
 
     try:
         resume_text = get_base_resume_text()
     except ResumeNotFoundError as exc:
         return {"error": str(exc)}
 
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     conn = get_connection()
     try:
         filter_settings = get_filter_settings(conn)
@@ -236,7 +235,7 @@ def run_scheduled_fit_scoring(settings: Settings | None = None) -> dict:
         run_id = start_workflow_run(conn, "main_pipeline")
         result = run_fit_scoring(
             conn, client, resume_text, filter_settings, workflow_run_id=run_id,
-            job_log_ws=job_log_ws, main_ws=main_ws,
+            job_log_ws=job_log_ws, main_ws=main_ws, provider=settings.llm_provider,
         )
         finish_workflow_run(
             conn, run_id, status="completed",

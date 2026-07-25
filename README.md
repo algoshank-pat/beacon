@@ -5,7 +5,7 @@
 - 🎯 **Tell it what you want.** Enter your target job titles, and matching roles from 5 major job sites land in your Google Sheet automatically.
 - 🔍 **No more dead-end descriptions.** Beacon scans every posting and instantly flags which companies actually sponsor work visas (H-1B/OPT) before you waste time reading.
 - 🌱 **Onboard companies instantly.** Want to track a specific company? Just type the name in a new row and tag it `SEED`, and Beacon sets up the automated tracking for it.
-- 🧠 **On-demand AI.** AI only runs when you ask. Flag a row, and Beacon scores how well the job matches your resume, for literal pennies paid straight to Anthropic on your own account, not to us.
+- 🧠 **On-demand AI.** AI only runs when you ask. Drop your resume into your local `resumes/` folder, flag a row on Google Sheets ("Go Score"), and Beacon scores how well that job matches it, for literal pennies paid straight to Anthropic or Gemini (whichever you set up) on your own account, not to us.
 - 🔒 **100% Private.** The software runs locally on your machine. No external servers, no third-party databases, and absolutely nobody watching your data.
 
 ## 📸 See it in action
@@ -28,7 +28,7 @@
 
 ## 🎯 Who this is for, and why
 
-👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay Anthropic (on your own account) for AI you don't need, or want your search tracked in your own private Sheet.
+👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay Anthropic or Gemini (on your own account) for AI you don't need, or want your search tracked in your own private Sheet.
 
 🎯 **Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's low cost today (see [Savings](#-time-and-cost-savings)); **free, permanently, is the goal.**
 
@@ -47,7 +47,7 @@ Fair question. LinkedIn Premium doesn't solve the one thing that costs visa hold
 
 ## 💰 Time and Cost Savings
 
-Real numbers from this project's own history, not an estimate. **Software is free**; any AI usage is paid directly to Anthropic, not to this project:
+Real numbers from this project's own history, not an estimate. **Software is free**; any AI usage is paid directly to Anthropic or Gemini (whichever you configure), not to this project:
 
 | Metric | Value |
 |---|---|
@@ -89,6 +89,8 @@ AI makes exactly two decisions in this pipeline. Everything else is free, determ
 
 🏛️ A third signal sits alongside these two, but isn't AI at all: real **DOL government filing data** on which companies have sponsored before, a "Likely work visa sponsor" flag, not a guarantee.
 
+🔀 **Both AI decisions can run on Claude (default) or Gemini** — add a `GEMINI_API_KEY` to `.env` instead of an Anthropic one and it's picked up automatically; set `LLM_PROVIDER=gemini` explicitly only if you have both keys set and want to force Gemini. Same prompts, same forced JSON schema, same behavior either way; only which provider gets billed changes.
+
 *(Full mechanics, including the pipeline diagram, exactly what the AI sees, and every My Decision state, plus how to run the DOL LCA check, are in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).)*
 
 ---
@@ -128,7 +130,7 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 | **Scheduling** | APScheduler (`BlockingScheduler`, single-instance file lock) |
 | **Database** | SQLite, WAL mode |
 | **Tracking / UI / Notification** | Google Sheets via `gspread` (service account auth) |
-| **LLM** | Anthropic Claude: Haiku 4.5 (visa classification), Sonnet 5 (fit scoring) |
+| **LLM** | Anthropic Claude (default): Haiku 4.5 (visa classification), Sonnet 5 (fit scoring) — or Gemini: Flash-Lite + Pro, via `LLM_PROVIDER=gemini` |
 | **Job sources** | Adzuna API, Greenhouse, Lever, Ashby, SmartRecruiters (all public/free) |
 | **Company data** | Financial Modeling Prep + StartupHub.ai + TinyFish Search (all free tier) |
 | **Location resolution** | US Census county/place reference data (bundled, public domain) |
@@ -141,7 +143,7 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 ### Prerequisites
 - 🐍 Python 3.14 (or 3.12 if 3.14 wheels are unavailable for a dependency)
 - 🔍 A free [Adzuna developer account](https://developer.adzuna.com)
-- 🤖 A free [Anthropic API key](https://console.anthropic.com)
+- 🤖 A free [Anthropic API key](https://console.anthropic.com), or a free [Gemini API key](https://aistudio.google.com) if you'd rather set `LLM_PROVIDER=gemini`
 - 🏢 A free [Financial Modeling Prep](https://financialmodelingprep.com) key and [StartupHub.ai](https://startuphub.ai) key
 - ➕ Optional: a free [TinyFish](https://agent.tinyfish.ai/api-keys) key, a third, best-effort industry source for companies the two above miss
 - 📊 A Google Cloud **service account** (not OAuth) shared as an Editor on two Google Sheets you create yourself: one for active matches ("Beacon"), one for excluded jobs ("Job Log")
@@ -276,10 +278,10 @@ beacon/
 > No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it: every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.
 
 **🔒 Is this a website or a service I sign up for, and is my data private?**
-> Neither, and yes. No server, no account, no sign-up. You clone the code and run it entirely on your own machine, using your own accounts for every external service it talks to. Nothing is sent anywhere except the API calls you configure yourself (Google Sheets, Anthropic, Adzuna, the ATS platforms, FMP/StartupHub/TinyFish), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
+> Neither, and yes. No server, no account, no sign-up. You clone the code and run it entirely on your own machine, using your own accounts for every external service it talks to. Nothing is sent anywhere except the API calls you configure yourself (Google Sheets, Anthropic or Gemini, Adzuna, the ATS platforms, FMP/StartupHub/TinyFish), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
 
 **💰 How much does it actually cost to run?**
-> The software itself is free, there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Savings](#-time-and-cost-savings): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88, that's what actual usage costs at this scale, not a fee anyone charges you.
+> The software itself is free, there's no fee to download or use it. You bring your own Anthropic or Gemini API key and pay that provider directly, only for what you actually use, at their normal rate. See [Savings](#-time-and-cost-savings): this project's own real usage (on Anthropic), across 137,000+ jobs processed over several weeks, totals $8.88, that's what actual usage costs at this scale, not a fee anyone charges you.
 
 **🐍 Do I need to know Python to use this?**
 > You need to be comfortable running a few CLI commands and editing a `.env` file (see [Setup](#️-setup)). Day-to-day use afterward is entirely in Google Sheets.
@@ -304,7 +306,7 @@ beacon/
 - ⏰ Automate the quarterly LCA re-check on a schedule once there's a reliable way past DOL's bot protection (today it's a manual download + `python -m app.cli lca-enrich`, by design; see the Real Historical Sponsorship Data section above)
 - 🔍 **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
 - 🖥️ **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column
-- 🤖 **Adding other AI backends for visa and fit scoring, alongside Claude**: specifically open-weight models run locally on your own laptop (e.g. via Ollama), not just another paid API. This is the concrete path toward [the Goal](#-who-this-is-for-and-why) of $0 ongoing cost: today's design already keeps Claude usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude's reliability on the same task first
+- 🤖 **A second paid provider (Gemini) is now supported** via `LLM_PROVIDER=gemini`, but that's not the $0 goal itself, just proof the abstraction works with more than one provider. The real remaining step toward [the Goal](#-who-this-is-for-and-why) is open-weight models run locally on your own laptop (e.g. via Ollama): today's design already keeps AI usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude/Gemini's reliability on the same task first
 
 ---
 
@@ -324,6 +326,12 @@ Step-by-step for every credential `.env.example` asks for. No screenshots (UIs c
 3. Click **Create Key**, give it a name, and copy the value (starts with `sk-ant-`); you only get to see it once
 4. Add billing/credits if you haven't already (Settings → Billing). New accounts usually start with some free credit, but visa-scan and fit-scoring need an active balance to keep running past that
 5. Paste the key into `.env` as `ANTHROPIC_API_KEY`
+
+### Gemini API key (`GEMINI_API_KEY`), alternative to Anthropic
+Same two jobs (visa classification, fit scoring), same forced-JSON-schema behavior, different provider billed.
+1. Go to [aistudio.google.com](https://aistudio.google.com) and sign in with a Google account
+2. Click **Get API Key → Create API key** (no credit card required for the free tier)
+3. Copy the key into `.env` as `GEMINI_API_KEY` — that's it, no `LLM_PROVIDER` line needed. If it's the only one of the two keys set, Gemini is picked automatically; `LLM_PROVIDER=gemini` is only needed to force Gemini when both keys are set.
 
 ### Adzuna (`ADZUNA_APP_ID` / `ADZUNA_APP_KEY`)
 1. Go to [developer.adzuna.com](https://developer.adzuna.com) and register for a free account

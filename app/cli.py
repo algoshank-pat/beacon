@@ -11,6 +11,7 @@ from app.filter_settings import get_filter_settings
 from app.fit_scoring import run_fit_scoring
 from app.ingest import run_ingestion
 from app.job_log import resolve_job_log_worksheet
+from app.llm_provider import LLMProviderError, build_llm_client
 from app.migrate import run_migrations
 from app.observability import finish_workflow_run, start_workflow_run
 from app.pipeline import run_full_pipeline, run_scheduled_approval_poll
@@ -169,14 +170,13 @@ def filter_cmd() -> None:
 @cli.command(name="visa-scan")
 @click.option("--limit", type=int, default=None, help="Max number of jobs to scan this run.")
 def visa_scan_cmd(limit: int | None) -> None:
-    """Run the Visa Scanner (regex + Haiku fallback) over jobs at status='new'."""
-    import anthropic
-
+    """Run the Visa Scanner (regex + Haiku/Gemini fallback) over jobs at status='new'."""
     settings = get_settings()
-    if not settings.anthropic_api_key:
-        raise click.ClickException("ANTHROPIC_API_KEY is not set in .env")
+    try:
+        client = build_llm_client(settings)
+    except LLMProviderError as exc:
+        raise click.ClickException(str(exc))
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     conn = get_connection()
     try:
         filter_settings = get_filter_settings(conn)
@@ -185,7 +185,7 @@ def visa_scan_cmd(limit: int | None) -> None:
         run_id = start_workflow_run(conn, "main_pipeline")
         result = run_visa_scan(
             conn, client, filter_settings, limit=limit, workflow_run_id=run_id,
-            job_log_ws=job_log_ws, main_ws=main_ws,
+            job_log_ws=job_log_ws, main_ws=main_ws, provider=settings.llm_provider,
         )
         finish_workflow_run(
             conn, run_id, status="completed",
@@ -211,18 +211,17 @@ def fit_score_cmd(limit: int | None) -> None:
     or "AI Score Pending" if a prior run's API call failed and left it there
     for retry) against the base resume. Also evicts any job with My Decision
     set to "Reject". Does nothing if nothing is currently flagged."""
-    import anthropic
-
     settings = get_settings()
-    if not settings.anthropic_api_key:
-        raise click.ClickException("ANTHROPIC_API_KEY is not set in .env")
+    try:
+        client = build_llm_client(settings)
+    except LLMProviderError as exc:
+        raise click.ClickException(str(exc))
 
     try:
         resume_text = get_base_resume_text()
     except ResumeNotFoundError as exc:
         raise click.ClickException(str(exc))
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     conn = get_connection()
     try:
         filter_settings = get_filter_settings(conn)
@@ -231,7 +230,7 @@ def fit_score_cmd(limit: int | None) -> None:
         run_id = start_workflow_run(conn, "main_pipeline")
         result = run_fit_scoring(
             conn, client, resume_text, filter_settings, limit=limit, workflow_run_id=run_id,
-            job_log_ws=job_log_ws, main_ws=main_ws,
+            job_log_ws=job_log_ws, main_ws=main_ws, provider=settings.llm_provider,
         )
         finish_workflow_run(
             conn, run_id, status="completed",

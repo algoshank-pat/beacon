@@ -73,6 +73,44 @@ class FakeAnthropicClient:
         self.messages = FakeAnthropicMessages(responses)
 
 
+class FakeGeminiUsageMetadata:
+    def __init__(self, prompt_token_count, candidates_token_count):
+        self.prompt_token_count = prompt_token_count
+        self.candidates_token_count = candidates_token_count
+
+
+class FakeGeminiCandidate:
+    def __init__(self, finish_reason):
+        self.finish_reason = finish_reason
+
+
+class FakeGeminiResponse:
+    def __init__(self, text, prompt_token_count=100, candidates_token_count=50, finish_reason="STOP"):
+        self.text = text
+        self.usage_metadata = FakeGeminiUsageMetadata(prompt_token_count, candidates_token_count)
+        self.candidates = [FakeGeminiCandidate(finish_reason)]
+
+
+class FakeGeminiModels:
+    """`responses` is either a single string (reused for every call) or a list
+    of strings consumed in order -- same contract as FakeAnthropicMessages."""
+
+    def __init__(self, responses):
+        self._fixed = responses if isinstance(responses, str) else None
+        self._responses = list(responses) if isinstance(responses, list) else None
+        self.calls = []
+
+    def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+        text = self._fixed if self._fixed is not None else self._responses.pop(0)
+        return FakeGeminiResponse(text)
+
+
+class FakeGeminiClient:
+    def __init__(self, responses):
+        self.models = FakeGeminiModels(responses)
+
+
 def _col_to_index(letters: str) -> int:
     idx = 0
     for ch in letters:

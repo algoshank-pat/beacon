@@ -19,6 +19,19 @@ from app.sheets import (
 )
 
 SONNET_MODEL = "claude-sonnet-5"
+# Gemini's more capable tier, the Sonnet-equivalent for this task -- GA
+# (Standard, not Preview), same reasoning as picking Sonnet over Haiku for
+# a step that needs real judgment, not just classification.
+#
+# NOT confirmed working against a real API key -- live tests against a real
+# key hit 429 (quota exhausted) before reaching the model, on every Pro-tier
+# candidate tried (this one plus two 3.x Preview models). That's a
+# different failure mode than the 404 "no longer available to new users"
+# that sank the original Flash-tier pick (app.visa_scan.GEMINI_FLASH_MODEL)
+# -- 429 means the model exists and this account just can't call it right
+# now, not that it's been sunset -- so this is left as-is rather than
+# swapped for an equally-unverified guess. Re-test once quota allows.
+GEMINI_PRO_MODEL = "gemini-2.5-pro"
 
 
 class FitScoreParseError(Exception):
@@ -107,6 +120,54 @@ def score_job(
     return result, usage
 
 
+def gemini_score_job(
+    client, job_title: str, company_name: str, description: str, resume_text: str
+) -> tuple[dict, dict]:
+    """Gemini equivalent of score_job -- identical prompt and forced JSON
+    schema, identical (result, usage) return shape, so run_fit_scoring's
+    provider dispatch can call either one without caring which it is."""
+    response = client.models.generate_content(
+        model=GEMINI_PRO_MODEL,
+        contents=FIT_SCORE_PROMPT.format(
+            title=job_title,
+            company=company_name,
+            description=description[:12000],
+            resume=resume_text[:12000],
+        ),
+        config={
+            "response_mime_type": "application/json",
+            "response_json_schema": FIT_SCORE_SCHEMA,
+            "max_output_tokens": 2048,
+        },
+    )
+    try:
+        result = json.loads(response.text)
+    except json.JSONDecodeError as exc:
+        reason = response.candidates[0].finish_reason if response.candidates else "unknown"
+        usage = {
+            "input_tokens": response.usage_metadata.prompt_token_count,
+            "output_tokens": response.usage_metadata.candidates_token_count,
+        }
+        raise FitScoreParseError(
+            f"Failed to parse fit-score JSON (finish_reason={reason}): {exc}", usage=usage
+        ) from exc
+    usage = {
+        "input_tokens": response.usage_metadata.prompt_token_count,
+        "output_tokens": response.usage_metadata.candidates_token_count,
+    }
+    return result, usage
+
+
+# Maps LLM_PROVIDER -> (score_fn, model_name_for_cost_estimation). Both
+# score_fns share the exact (client, job_title, company_name, description,
+# resume_text) -> (result, usage) contract, so run_fit_scoring's dispatch is
+# a single lookup, not a branch per provider.
+FIT_SCORE_PROVIDERS = {
+    "anthropic": (score_job, SONNET_MODEL),
+    "gemini": (gemini_score_job, GEMINI_PRO_MODEL),
+}
+
+
 def _get_company(conn: sqlite3.Connection, job: sqlite3.Row) -> sqlite3.Row | None:
     if job["company_id"] is None:
         return None
@@ -149,6 +210,7 @@ def run_fit_scoring(
     workflow_run_id: int | None = None,
     job_log_ws=None,
     main_ws=None,
+    provider: str = "anthropic",
 ) -> dict:
     """Scores only jobs the user has explicitly flagged via the Beacon
     sheet's My Decision column ("Go Score", or "AI Score Pending" if a prior
@@ -175,6 +237,11 @@ def run_fit_scoring(
     }
     if main_ws is None:
         return empty_result
+
+    # `client` must already match `provider` (an anthropic.Anthropic client
+    # for "anthropic", a genai.Client for "gemini") -- see app.llm_provider,
+    # the one place that builds the right one from Settings.
+    score_fn, model_name = FIT_SCORE_PROVIDERS.get(provider, (score_job, SONNET_MODEL))
 
     rejected = _process_rejections(conn, main_ws, job_log_ws, workflow_run_id)
 
@@ -229,12 +296,12 @@ def run_fit_scoring(
         update_my_decision(main_ws, job["id"], MY_DECISION_AI_SCORE_PENDING)
 
         try:
-            result, usage = score_job(
+            result, usage = score_fn(
                 client, job["title"], job["company_name"] or "Unknown", job["description"] or "", resume_text
             )
         except FitScoreParseError as exc:
             failed += 1
-            cost = estimate_cost_usd(SONNET_MODEL, exc.usage["input_tokens"], exc.usage["output_tokens"])
+            cost = estimate_cost_usd(model_name, exc.usage["input_tokens"], exc.usage["output_tokens"])
             tracker.record_spend(cost)
             total_cost += cost
             total_input_tokens += exc.usage["input_tokens"]
@@ -247,7 +314,7 @@ def run_fit_scoring(
                 )
             continue  # stays AI Score Pending in the DB and on the Sheet -- retried next run
 
-        cost = estimate_cost_usd(SONNET_MODEL, usage["input_tokens"], usage["output_tokens"])
+        cost = estimate_cost_usd(model_name, usage["input_tokens"], usage["output_tokens"])
         tracker.record_spend(cost)
         total_cost += cost
         total_input_tokens += usage["input_tokens"]

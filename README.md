@@ -42,6 +42,7 @@ Fair question. LinkedIn Premium doesn't solve the one thing that costs visa hold
 | Cost | ~$30–$40/month, forever | Free software. Real lifetime AI cost so far: **$8.88** (see below) |
 | Filter logic | Black-box "match" score | Every rule lives in a table you can read and edit |
 | Privacy & tracking | Public "Open to Work" status; only sees LinkedIn's own Apply flow | Fully private, your own Sheet: tracks any job however you actually applied |
+| LinkedIn account risk | None, it's their own product | None here either: Beacon never scrapes LinkedIn or touches your account, it only pulls from Adzuna, Greenhouse, Lever, Ashby, and SmartRecruiters |
 
 🏆 **The short version:** it replaces the one feature visa holders need most, "will this company even consider me," at a fraction of a month's subscription.
 

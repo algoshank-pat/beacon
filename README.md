@@ -1,11 +1,12 @@
 # 🔭 Beacon: Job Search Automation for Work Visa Holders
 
 **In plain words:**
-- Beacon hunts for jobs so you don't have to. Just tell it what you're after.
-- Got a favorite company? Type its name into a `SEED` row on the Sheet, and Beacon tracks every opening there automatically.
-- It sniffs out which companies will actually sponsor a work visa (H-1B), before you waste a click.
-- Results land in a Google Sheet you already know how to use. Check it from your phone, no new app, no new password to forget.
-- Runs on your own computer. Private by design. Nobody's watching, not even us.
+- Your Google Sheet is your job tracker. Beacon is the personal assistant that keeps it full, running on your own laptop.
+- Tell it the job titles you want. Matching postings from job sites land on your Sheet automatically, ready for you to track and manage.
+- It checks every posting for you: flags which companies actually sponsor a work visa (H-1B), before you ever have to read a job description.
+- Got a favorite company that's not on your Google Sheet? Add a new row, type the name, mark it `SEED`. Beacon takes it from there.
+- AI only runs when you ask. Flag a job and Beacon scores how well it fits your resume, for about a cent.
+- It runs only on your laptop. Private by design. Nobody's watching, not even us.
 
 ## 📸 See it in action
 

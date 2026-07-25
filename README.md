@@ -5,7 +5,7 @@
 - 🎯 **Tell it what you want.** Enter your target job titles, and matching roles from 5 major job sites land in your Google Sheet automatically.
 - 🔍 **No more dead-end descriptions.** Beacon scans every posting and instantly flags which companies actually sponsor work visas (H-1B/OPT) before you waste time reading.
 - 🌱 **Onboard companies instantly.** Want to track a specific company? Just type the name in a new row and tag it `SEED`, and Beacon sets up the automated tracking for it.
-- 🧠 **On-demand AI.** AI only runs when you ask. Flag a row, and Beacon scores how well the job matches your resume for literal pennies.
+- 🧠 **On-demand AI.** AI only runs when you ask. Flag a row, and Beacon scores how well the job matches your resume, for literal pennies paid straight to Anthropic on your own account, not to us.
 - 🔒 **100% Private.** The software runs locally on your machine. No external servers, no third-party databases, and absolutely nobody watching your data.
 
 ## 📸 See it in action
@@ -28,7 +28,7 @@
 
 ## 🎯 Who this is for, and why
 
-👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay for AI you don't need, or want your search tracked in your own private Sheet.
+👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay Anthropic (on your own account) for AI you don't need, or want your search tracked in your own private Sheet.
 
 🎯 **Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's low cost today (see [Savings](#-time-and-cost-savings)); **free, permanently, is the goal.**
 

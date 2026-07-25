@@ -34,9 +34,9 @@
 
 ## 🎯 Who this is for, and why
 
-For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay for AI you don't need, or want your search tracked in your own private Sheet.
+👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay for AI you don't need, or want your search tracked in your own private Sheet.
 
-**Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's low cost today (see [Savings](#-time-and-cost-savings)); free, permanently, is the goal.
+🎯 **Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's low cost today (see [Savings](#-time-and-cost-savings)); **free, permanently, is the goal.**
 
 ## 💸 Why not just pay for LinkedIn Premium?
 
@@ -49,7 +49,7 @@ Fair question. LinkedIn Premium doesn't solve the one thing that costs visa hold
 | Filter logic | Black-box "match" score | Every rule lives in a table you can read and edit |
 | Privacy & tracking | Public "Open to Work" status; only sees LinkedIn's own Apply flow | Fully private, your own Sheet: tracks any job however you actually applied |
 
-**The short version**: it replaces the one feature visa holders need most, "will this company even consider me," at a fraction of a month's subscription.
+🏆 **The short version:** it replaces the one feature visa holders need most, "will this company even consider me," at a fraction of a month's subscription.
 
 ## 💰 Time and Cost Savings
 
@@ -63,9 +63,9 @@ Real numbers from this project's own history, not an estimate. **Software is fre
 | Companies tracked | **2,674** |
 | **Typical AI spend for a real user** | **Under $1/month** (**$0** if you never type `Go Score`) |
 
-For reference, this project's own real lifetime spend so far, across all 137,318 postings above and several weeks of daily use, is **$8.88 total**.
+📌 For reference, this project's own real lifetime spend so far, across all 137,318 postings above and several weeks of daily use, is **$8.88 total**.
 
-Stays cheap because: company lookups only use free data sources (left blank if neither has an answer, never a paid fallback); resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching, with AI stepping in only for the small remainder where the wording is genuinely unclear.
+💡 **Stays cheap because:** company lookups only use free data sources (left blank if neither has an answer, never a paid fallback); resume-fit scoring only runs when you flag a job; and visa checks are mostly free text-matching, with AI stepping in only for the small remainder where the wording is genuinely unclear.
 
 **What that restriction language actually looks like** (real phrasing caught in live postings, usually buried a few paragraphs in, not in the title):
 
@@ -77,12 +77,12 @@ Stays cheap because: company lookups only use free data sources (left blank if n
 
 ## ✨ Key Features
 
-- **5 job sources**: Adzuna plus direct polling of 4 ATS platforms
-- **3-tier visa detection**: free checks first, AI only when genuinely ambiguous
-- **Self-onboarding**: type a company name into a `SEED` row, done
-- **Live-editable filters**: keywords, seniority, location, all in a table, no code
-- **On-demand fit scoring**: AI runs only when you flag `Go Score`
-- **Google Sheets as the UI**: no dashboard, no login, nothing new to learn
+- 🌐 **5 job sources**: Adzuna plus direct polling of 4 ATS platforms
+- 🛡️ **3-tier visa detection**: free checks first, AI only when genuinely ambiguous
+- 🌱 **Self-onboarding**: type a company name into a `SEED` row, done
+- 🎛️ **Live-editable filters**: keywords, seniority, location, all in a table, no code
+- 🧠 **On-demand fit scoring**: AI runs only when you flag `Go Score`
+- 📋 **Google Sheets as the UI**: no dashboard, no login, nothing new to learn
 
 ---
 
@@ -90,10 +90,10 @@ Stays cheap because: company lookups only use free data sources (left blank if n
 
 AI makes exactly two decisions in this pipeline. Everything else is free, deterministic code:
 
-- **Visa check**: does this posting rule out sponsorship? Automatic on every job; free pattern-matching first, AI only for the genuinely unclear remainder.
-- **Fit score**: does this job match your resume? Only when you type `Go Score` into that row, never automatic, never your whole backlog.
+- 🛡️ **Visa check**: does this posting rule out sponsorship? Automatic on every job; free pattern-matching first, AI only for the genuinely unclear remainder.
+- 🎯 **Fit score**: does this job match your resume? Only when you type `Go Score` into that row, never automatic, never your whole backlog.
 
-A third signal sits alongside these two, but isn't AI at all: real **DOL government filing data** on which companies have sponsored before, a "Likely work visa sponsor" flag, not a guarantee.
+🏛️ A third signal sits alongside these two, but isn't AI at all: real **DOL government filing data** on which companies have sponsored before, a "Likely work visa sponsor" flag, not a guarantee.
 
 *(Full mechanics, including the pipeline diagram, exactly what the AI sees, and every My Decision state, plus how to run the DOL LCA check, are in [`job-search-app-technical-spec.md`](./job-search-app-technical-spec.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).)*
 
@@ -145,12 +145,12 @@ Full diagram with every field/table: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTUR
 ## ⚙️ Setup
 
 ### Prerequisites
-- Python 3.14 (or 3.12 if 3.14 wheels are unavailable for a dependency)
-- A free [Adzuna developer account](https://developer.adzuna.com)
-- A free [Anthropic API key](https://console.anthropic.com)
-- A free [Financial Modeling Prep](https://financialmodelingprep.com) key and [StartupHub.ai](https://startuphub.ai) key
-- Optional: a free [TinyFish](https://agent.tinyfish.ai/api-keys) key, a third, best-effort industry source for companies the two above miss
-- A Google Cloud **service account** (not OAuth) shared as an Editor on two Google Sheets you create yourself: one for active matches ("Beacon"), one for excluded jobs ("Job Log")
+- 🐍 Python 3.14 (or 3.12 if 3.14 wheels are unavailable for a dependency)
+- 🔍 A free [Adzuna developer account](https://developer.adzuna.com)
+- 🤖 A free [Anthropic API key](https://console.anthropic.com)
+- 🏢 A free [Financial Modeling Prep](https://financialmodelingprep.com) key and [StartupHub.ai](https://startuphub.ai) key
+- ➕ Optional: a free [TinyFish](https://agent.tinyfish.ai/api-keys) key, a third, best-effort industry source for companies the two above miss
+- 📊 A Google Cloud **service account** (not OAuth) shared as an Editor on two Google Sheets you create yourself: one for active matches ("Beacon"), one for excluded jobs ("Job Log")
 
 Don't have these yet? See the [Appendix](#-appendix-getting-each-api-key) for step-by-step instructions for every single one.
 
@@ -205,9 +205,9 @@ The rest genuinely needs your own accounts, so no script can do it for you:
 | `require_visa_sponsorship` | Evict postings the Visa Scanner classifies `restricted` |
 | `require_h1b_track_record` | Only companies with a confirmed historical H-1B track record (depends on the not-yet-built historical-data feature on the [Roadmap](#️-roadmap)) |
 
-**Not supported yet, genuinely missing today**: filtering by salary range, and filtering by funding stage/company type (a real "startups only" filter, as opposed to the founded-year/headcount proxies above). Both are now on the [Roadmap](#️-roadmap).
+⚠️ **Not supported yet, genuinely missing today**: filtering by salary range, and filtering by funding stage/company type (a real "startups only" filter, as opposed to the founded-year/headcount proxies above). Both are now on the [Roadmap](#️-roadmap).
 
-**This is not architecturally US-only, even though it ships US-focused by default.** Visa-sponsorship job hunting is a real problem everywhere, not just the US. Adzuna alone already covers the UK, Canada, India, Germany, Australia, and more. Today, though, the shipped defaults are US-only in practice: `require_us_location: true` is on by default in `seed_filters.yaml`, and the Adzuna integration (`app/sources/adzuna.py`) supports a `country` parameter but the actual pipeline call never passes it, so it's silently locked to `country="us"`. Making `country` a real, configurable `filter_settings` value (instead of a hardcoded default a few layers down) is a small, concrete fix, now on the [Roadmap](#️-roadmap).
+🌍 **This is not architecturally US-only, even though it ships US-focused by default.** Visa-sponsorship job hunting is a real problem everywhere, not just the US. Adzuna alone already covers the UK, Canada, India, Germany, Australia, and more. Today, though, the shipped defaults are US-only in practice: `require_us_location: true` is on by default in `seed_filters.yaml`, and the Adzuna integration (`app/sources/adzuna.py`) supports a `country` parameter but the actual pipeline call never passes it, so it's silently locked to `country="us"`. Making `country` a real, configurable `filter_settings` value (instead of a hardcoded default a few layers down) is a small, concrete fix, now on the [Roadmap](#️-roadmap).
 
 ### Resource requirements & platform support
 
@@ -263,54 +263,54 @@ beacon/
 
 ## 🔐 Security
 
-- No credentials are hardcoded anywhere in the source: every secret is loaded from `.env` or the service-account JSON path, both gitignored
-- `.env.example` and `seed_companies.example.yaml` contain placeholder/template values only
-- The live SQLite database (which contains real scraped postings and personal application decisions) and the real service-account key are never committed
-- See [`PUBLISHING_GUIDE.md`](./PUBLISHING_GUIDE.md) for the full secret-audit checklist this repo was published against
+- 🔑 **No hardcoded credentials**: every secret is loaded from `.env` or the service-account JSON path, both gitignored
+- 📄 **Templates only**: `.env.example` and `seed_companies.example.yaml` contain placeholder values, nothing real
+- 🚫 **Never committed**: the live SQLite database (real scraped postings and personal application decisions) and the real service-account key
+- ✅ See [`PUBLISHING_GUIDE.md`](./PUBLISHING_GUIDE.md) for the full secret-audit checklist this repo was published against
 
 ---
 
 ## ❓ FAQ
 
-**Can you get me a job, or tell me which companies sponsor visas?**
+**🎯 Can you get me a job, or tell me which companies sponsor visas?**
 > No. See the [Disclaimer](#️-disclaimer) below. There's no personally curated company list anywhere in this project, and I'm not a recruiter or immigration attorney. Beacon's core signal reads a specific job posting's own text and classifies what *that posting* says, nothing more. It also optionally shows a "likely sponsors" flag from real DOL government filing data (see [How AI Fits In](#-how-ai-fits-in)), a positive historical indicator, not a guarantee about any specific role.
 
-**Can I use more than one resume?**
+**📄 Can I use more than one resume?**
 > Not yet, a real, known limitation. Fit-scoring always reads a single file (`resumes/base_resume.md`, falling back to `.txt` then `.docx`, first match wins), with no way to select a different one per job or per role type. If you want to score against different resumes for different kinds of roles, today's only workaround is manually swapping the file between runs.
 
-**Does this scrape LinkedIn?**
+**🚫 Does this scrape LinkedIn?**
 > No. LinkedIn's Terms of Service explicitly prohibit automated scraping, and Beacon deliberately doesn't touch it: every source here (Adzuna, Greenhouse, Lever, Ashby, SmartRecruiters) is a public, documented API meant to be queried programmatically.
 
-**Is this a website or a service I sign up for, and is my data private?**
+**🔒 Is this a website or a service I sign up for, and is my data private?**
 > Neither, and yes. No server, no account, no sign-up. You clone the code and run it entirely on your own machine, using your own accounts for every external service it talks to. Nothing is sent anywhere except the API calls you configure yourself (Google Sheets, Anthropic, Adzuna, the ATS platforms, FMP/StartupHub/TinyFish), and none of those see anything beyond the single request you're making in that moment. Nobody, including whoever wrote this code, sees your search activity, your resume, or your decisions.
 
-**How much does it actually cost to run?**
+**💰 How much does it actually cost to run?**
 > The software itself is free, there's no fee to download or use it. You bring your own Anthropic API key and pay Anthropic directly, only for what you actually use, at their normal rate. See [Savings](#-time-and-cost-savings): this project's own real usage, across 137,000+ jobs processed over several weeks, totals $8.88, that's what actual usage costs at this scale, not a fee anyone charges you.
 
-**Do I need to know Python to use this?**
+**🐍 Do I need to know Python to use this?**
 > You need to be comfortable running a few CLI commands and editing a `.env` file (see [Setup](#️-setup)). Day-to-day use afterward is entirely in Google Sheets.
 
-**Can I use this for a non-tech job search?**
+**💼 Can I use this for a non-tech job search?**
 > Yes. Nothing in the filter/keyword design is tech-specific. The example keyword lists target Solutions Architect/Presales-style roles because that's what this was originally built for, but every keyword, title exclusion, and threshold lives in an editable table, not code.
 
-**Why Google Sheets instead of a real dashboard?**
+**📋 Why Google Sheets instead of a real dashboard?**
 > Because you already know how to use it, it's free, it's already got notifications/mobile access/sharing solved, and it means zero UI code to build or maintain.
 
 ---
 
 ## 🛣️ Roadmap
 
-- **Make `country` a real, configurable setting** instead of a hardcoded default a few layers into `app/sources/adzuna.py`. Adzuna already covers the UK, Canada, India, Germany, Australia, and more, and this problem is not US-specific. Today's `country="us"` default and `require_us_location: true` default are just unconfigured defaults, not an architectural limit
-- Batch Google Sheets writes (`append_rows` + in-memory duplicate-check) instead of one API call per job. The current per-job cost is what makes a large backlog slow
-- Automatic re-validation of jobs already on the sheet against later filter-criteria changes (today, only newly-ingested jobs are checked against the *current* rules)
-- Resume/cover-letter generation handoff to Claude Desktop on Approve (designed, not yet built)
-- **Salary-range filtering**: salary is extracted and shown today, but nothing actually filters on it yet
-- **A real "startups only" filter**: `founded_after_year` and `employee_count_max` are rough proxies today; `companies.funding_stage`/`company_type` are already enriched (`series_a`, `private`, etc.) but never wired into filtering at all
-- Actually download and feed in more than one fiscal year's LCA file. `lca-enrich` already accepts and merges multiple files (see the Real Historical Sponsorship Data section above), but only one quarter (FY2026 Q2) has been run against the live table so far
-- Automate the quarterly LCA re-check on a schedule once there's a reliable way past DOL's bot protection (today it's a manual download + `python -m app.cli lca-enrich`, by design; see the Real Historical Sponsorship Data section above)
-- **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
-- **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column
-- **Adding other AI backends for visa and fit scoring, alongside Claude**: specifically open-weight models run locally on your own laptop (e.g. via Ollama), not just another paid API. This is the concrete path toward [the Goal](#-who-this-is-for-and-why) of $0 ongoing cost: today's design already keeps Claude usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude's reliability on the same task first
+- 🌍 **Make `country` a real, configurable setting** instead of a hardcoded default a few layers into `app/sources/adzuna.py`. Adzuna already covers the UK, Canada, India, Germany, Australia, and more, and this problem is not US-specific. Today's `country="us"` default and `require_us_location: true` default are just unconfigured defaults, not an architectural limit
+- ⚡ Batch Google Sheets writes (`append_rows` + in-memory duplicate-check) instead of one API call per job. The current per-job cost is what makes a large backlog slow
+- 🔄 Automatic re-validation of jobs already on the sheet against later filter-criteria changes (today, only newly-ingested jobs are checked against the *current* rules)
+- 📝 Resume/cover-letter generation handoff to Claude Desktop on Approve (designed, not yet built)
+- 💵 **Salary-range filtering**: salary is extracted and shown today, but nothing actually filters on it yet
+- 🚀 **A real "startups only" filter**: `founded_after_year` and `employee_count_max` are rough proxies today; `companies.funding_stage`/`company_type` are already enriched (`series_a`, `private`, etc.) but never wired into filtering at all
+- 🏛️ Actually download and feed in more than one fiscal year's LCA file. `lca-enrich` already accepts and merges multiple files (see the Real Historical Sponsorship Data section above), but only one quarter (FY2026 Q2) has been run against the live table so far
+- ⏰ Automate the quarterly LCA re-check on a schedule once there's a reliable way past DOL's bot protection (today it's a manual download + `python -m app.cli lca-enrich`, by design; see the Real Historical Sponsorship Data section above)
+- 🔍 **Resume gap analysis and tailored-resume generation against your master resume**, going beyond today's numeric fit score to actually explain what's missing and draft a tailored version for a specific posting
+- 🖥️ **Both of the above need a real UX, not a spreadsheet cell.** A Sheets cell is a fine place for a visa flag or a 0-100 fit score; it's a bad place for a multi-paragraph gap analysis or a full tailored resume. These are natural candidates for the Claude Desktop handoff (already designed, not yet built) or some other dedicated output surface, not another Sheet column
+- 🤖 **Adding other AI backends for visa and fit scoring, alongside Claude**: specifically open-weight models run locally on your own laptop (e.g. via Ollama), not just another paid API. This is the concrete path toward [the Goal](#-who-this-is-for-and-why) of $0 ongoing cost: today's design already keeps Claude usage to cents by calling it only when free checks can't decide, and a local model swapped in for that same narrow, well-defined classification step removes even that small cost, as long as it can match Claude's reliability on the same task first
 
 ---
 
@@ -396,10 +396,10 @@ python -m app.cli lca-enrich lca_data/FY2026_Q2.xlsx lca_data/FY2025_Q4.xlsx
 ```
 Pass every file you want considered in the same command. It parses each one, merges them (keeping the most recent filing date per employer across all files given), matches every tracked company by name, and updates `DOL LCA Match`/`Last Sponsored` on both Sheets plus the underlying `companies` columns.
 
-**Keeping it current: there's no "training" here, just a snapshot you refresh by hand**
-- DOL adds a new quarter roughly every 3 months. Since each new quarter's file is cumulative for its fiscal year, re-running with just that newest file already picks up every new filing from that fiscal year, so you don't need to re-download older quarters of the same year.
-- It's safe to run `lca-enrich` with just one new file at a time as quarters come out. A matched company's stored date is only ever updated forward. If the date already in the database for a company is more recent than what the current run's file(s) show for it, the existing date is left alone rather than being overwritten backward in time (so accidentally re-feeding an older fiscal year's file after a newer one is already loaded can't roll anything back).
-- Still worth keeping every file you've downloaded in `lca_data/` rather than deleting them. There's no persisted history of *which* files have already been applied, so if you ever need to rebuild the database from scratch, you'll want the full set on hand again.
+**🔄 Keeping it current: there's no "training" here, just a snapshot you refresh by hand**
+- 📅 DOL adds a new quarter roughly every 3 months. Since each new quarter's file is cumulative for its fiscal year, re-running with just that newest file already picks up every new filing from that fiscal year, so you don't need to re-download older quarters of the same year.
+- ✅ It's safe to run `lca-enrich` with just one new file at a time as quarters come out. A matched company's stored date is only ever updated forward. If the date already in the database for a company is more recent than what the current run's file(s) show for it, the existing date is left alone rather than being overwritten backward in time (so accidentally re-feeding an older fiscal year's file after a newer one is already loaded can't roll anything back).
+- 💾 Still worth keeping every file you've downloaded in `lca_data/` rather than deleting them. There's no persisted history of *which* files have already been applied, so if you ever need to rebuild the database from scratch, you'll want the full set on hand again.
 
 ---
 

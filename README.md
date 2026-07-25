@@ -1,4 +1,4 @@
-# 🔭 Beacon: Job Search Automation for Work Visa Holders
+# 🔭 Beacon: The Job Search Assistant for Work Visa Holders
 
 **💡 In plain words:**
 📊 **Your Google Sheet is your job tracker.** Beacon is the automated assistant that keeps it full, running entirely on your own laptop.

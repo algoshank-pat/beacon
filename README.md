@@ -30,7 +30,7 @@
 
 👥 For H-1B holders, F-1 OPT/STEM-OPT students, and anyone whose job search has to filter for visa sponsorship, especially if you're tired of dead-end postings, don't want to pay Anthropic or Gemini (on your own account) for AI you don't need, or want your search tracked in your own private Sheet.
 
-🎯 **Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's low cost today (see [Savings](#-time-and-cost-savings)); **free, permanently, is the goal.**
+🎯 **Why:** every visa holder should be able to find jobs that fit and apply to companies that actually sponsor, without wasting time or paying for a subscription. It's zero dollars if you don't invoke the AI, and pennies if you do (see [Savings](#-time-and-cost-savings)); **free, permanently, is the goal.**
 
 ## 💸 Why not just pay for LinkedIn Premium?
 

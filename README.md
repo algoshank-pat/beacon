@@ -10,15 +10,9 @@
 
 ## 📸 See it in action
 
-| Beacon Tracking Sheet | SQLite Schema |
-|---|---|
-| ![Beacon sheet with job postings, visa flags, and decision columns](./docs/screenshots/beacon_sheet.png) | ![SQLite database schema: all tables and indices](./docs/screenshots/database_schema.png) |
+![Beacon sheet with job postings, visa flags, and decision columns](./docs/screenshots/beacon_sheet.png)
 
-| Sample Company Data | Source: a real public Greenhouse job board |
-|---|---|
-| ![Sample rows from the companies table](./docs/screenshots/database_data.png) | ![Anthropic's real public Greenhouse job board](./docs/screenshots/source_greenhouse.png) |
-
-*(Company/job data above is from a live personal account. The Decision/My Decision columns shown are unset defaults, not personal choices. See `docs/screenshots/README.md` for the full redaction notes.)*
+*(Company/job data above is from a live personal account. The Decision/My Decision columns shown are unset defaults, not personal choices. More screenshots, including the database schema and a sample source job board, are in [`docs/screenshots/`](./docs/screenshots/README.md).)*
 
 ![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)
 ![Anthropic](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-D97757?logo=anthropic&logoColor=white)

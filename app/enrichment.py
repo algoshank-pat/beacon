@@ -56,7 +56,29 @@ future feature, not an extension of this module.
    (multi-source agreement, an audit-trail source URL) built to mitigate
    it. Independent "checked" tracker (`tinyfish_last_checked`), same
    pattern as the other two.
-"""
+
+Sheets pushes (pushing a newly-enriched company's fields onto every one of
+its jobs' Beacon rows) are batched across a WHOLE run, not one API call per
+job: the row lookup reads the Job ID column ONCE via build_job_row_map up
+front, per-company update requests are only built (not written) during the
+loop, and everything collected is flushed via a single batch_update_cells
+call at the end. Previously every job got its own find_existing_row read
+plus 3 separate ws.update() writes -- for a company with several tracked
+postings, enriching it alone cost 4+ API calls per job. That was both a
+real per-run Sheets-quota/latency cost and, since every write independently
+trips Google's native "Any changes are made" notification rule, a major
+contributor to a live-reported notification flood (86 emails in a 4-hour
+window traced back to exactly this kind of unbatched per-job write, across
+this module plus app.salary_refresh/app.cloud_platforms_refresh).
+
+Both the row-map read and the final batch flush are wrapped in their own
+try/except, same "a Sheets outage must not abort the whole backlog"
+principle this module already applied per-company -- the trade-off is a
+coarser failure grain (one outage now loses this whole run's pushes
+together, not just one company's), but the DB write in _apply_enrichment
+above always happens first and unconditionally, so nothing is ever lost,
+only delayed until a later run naturally re-pushes it (e.g. a new job for
+that company gets added fresh) or the outage clears."""
 from __future__ import annotations
 
 import json
@@ -64,7 +86,7 @@ import sqlite3
 
 from app.fmp import fetch_company_profile as fetch_fmp_profile
 from app.observability import log_step
-from app.sheets import update_company_columns
+from app.sheets import batch_update_cells, build_job_row_map, company_columns_update_requests
 from app.startuphub import fetch_company_profile as fetch_startuphub_profile
 from app.tinyfish import fetch_company_industry as fetch_tinyfish_industry
 
@@ -118,19 +140,63 @@ def _apply_enrichment(conn: sqlite3.Connection, company_id: int, result: dict, c
     conn.commit()
 
 
-def _push_to_beacon(conn: sqlite3.Connection, main_ws, company_id: int) -> None:
-    """Re-reads the just-updated company row and pushes it onto every one of
-    its jobs that's currently on Beacon. Without this, a company enriched
-    after its job's Beacon row already exists would never show these fields
-    there -- only a brand-new row created afterward picks them up."""
+def _build_job_row_map_safely(main_ws, workflow_run_id: int | None, step_name: str, conn: sqlite3.Connection) -> dict:
+    """build_job_row_map, but a Sheets outage here must not abort the whole
+    enrichment run -- same reasoning as the final batch flush's own
+    try/except (see module docstring). Returns {} on failure, which just
+    means every _company_beacon_updates call below finds no row for any
+    job this run and pushes nothing, not that anything crashes."""
     if main_ws is None:
-        return
+        return {}
+    try:
+        return build_job_row_map(main_ws)
+    except Exception as exc:  # noqa: BLE001
+        if workflow_run_id is not None:
+            log_step(
+                conn, workflow_run_id=workflow_run_id, step_name=step_name,
+                step_status="beacon_row_map_failed", detail=str(exc),
+            )
+        return {}
+
+
+def _company_beacon_updates(conn: sqlite3.Connection, company_id: int, row_map: dict[int, int]) -> list[dict]:
+    """Builds (without writing) the batch_update_cells entries pushing a
+    just-updated company's fields onto every one of its jobs currently on
+    Beacon. Without this, a company enriched after its job's Beacon row
+    already exists would never show these fields there -- only a brand-new
+    row created afterward picks them up. Pure/local (just dict-building, no
+    Sheets API call), so it can't itself raise a Sheets-outage exception --
+    the caller collects these across the whole run and flushes them
+    together via one batch_update_cells call (see module docstring)."""
     company = conn.execute("SELECT * FROM companies WHERE id = ?", (company_id,)).fetchone()
     job_ids = conn.execute(
         "SELECT id FROM jobs WHERE company_id = ? AND sheet_row_number IS NOT NULL", (company_id,)
     ).fetchall()
+    updates = []
     for row in job_ids:
-        update_company_columns(main_ws, row["id"], company)
+        row_number = row_map.get(row["id"])
+        if row_number is not None:
+            updates.extend(company_columns_update_requests(row_number, company))
+    return updates
+
+
+def _flush_beacon_updates_safely(
+    main_ws, sheet_updates: list[dict], workflow_run_id: int | None, step_name: str, conn: sqlite3.Connection,
+) -> None:
+    """batch_update_cells, but a Sheets outage here must not abort the run
+    that already finished all its DB writes -- same "a Sheets outage must
+    not abort the whole backlog" principle this module applied per-company
+    before batching (see module docstring for the accepted trade-off)."""
+    if main_ws is None:
+        return
+    try:
+        batch_update_cells(main_ws, sheet_updates)
+    except Exception as exc:  # noqa: BLE001
+        if workflow_run_id is not None:
+            log_step(
+                conn, workflow_run_id=workflow_run_id, step_name=step_name,
+                step_status="beacon_push_failed", detail=str(exc),
+            )
 
 
 def run_startuphub_enrichment(
@@ -162,7 +228,10 @@ def run_startuphub_enrichment(
     else:
         companies = conn.execute(query).fetchall()
 
+    row_map = _build_job_row_map_safely(main_ws, workflow_run_id, "enrich_startuphub", conn)
+
     enriched = no_match = 0
+    sheet_updates = []
     for company in companies:
         try:
             result = fetch_startuphub_profile(company["name"], startuphub_api_key)
@@ -178,14 +247,7 @@ def run_startuphub_enrichment(
         # StartupHub for the same company forever once it's confirmed to
         # have no data there.
         _apply_enrichment(conn, company["id"], result or {}, "startuphub_last_checked")
-        try:
-            _push_to_beacon(conn, main_ws, company["id"])
-        except Exception as exc:  # a Sheets outage must not abort the whole backlog
-            if workflow_run_id is not None:
-                log_step(
-                    conn, workflow_run_id=workflow_run_id, step_name="enrich_startuphub",
-                    step_status="beacon_push_failed", detail=f"{company['name']}: {exc}",
-                )
+        sheet_updates.extend(_company_beacon_updates(conn, company["id"], row_map))
         if result:
             enriched += 1
         else:
@@ -197,6 +259,8 @@ def run_startuphub_enrichment(
                 step_status="ok_startuphub" if result else "no_match",
                 detail=f"{company['name']}: {json.dumps(result) if result else 'no data from StartupHub -- left blank'}",
             )
+
+    _flush_beacon_updates_safely(main_ws, sheet_updates, workflow_run_id, "enrich_startuphub", conn)
 
     return {"evaluated": len(companies), "enriched_startuphub": enriched, "no_match_startuphub": no_match}
 
@@ -230,7 +294,10 @@ def run_fmp_enrichment(
     else:
         companies = conn.execute(query).fetchall()
 
+    row_map = _build_job_row_map_safely(main_ws, workflow_run_id, "enrich_fmp", conn)
+
     enriched = no_match = 0
+    sheet_updates = []
     for company in companies:
         try:
             result = fetch_fmp_profile(company["name"], fmp_api_key)
@@ -246,14 +313,7 @@ def run_fmp_enrichment(
         # FMP for the same company forever once it's confirmed private/
         # unmatched.
         _apply_enrichment(conn, company["id"], result or {}, "financial_data_last_checked")
-        try:
-            _push_to_beacon(conn, main_ws, company["id"])
-        except Exception as exc:  # a Sheets outage must not abort the whole backlog
-            if workflow_run_id is not None:
-                log_step(
-                    conn, workflow_run_id=workflow_run_id, step_name="enrich_fmp",
-                    step_status="beacon_push_failed", detail=f"{company['name']}: {exc}",
-                )
+        sheet_updates.extend(_company_beacon_updates(conn, company["id"], row_map))
         if result:
             enriched += 1
         else:
@@ -265,6 +325,8 @@ def run_fmp_enrichment(
                 step_status="ok_fmp" if result else "no_match",
                 detail=f"{company['name']}: {json.dumps(result) if result else 'no data from FMP -- left blank'}",
             )
+
+    _flush_beacon_updates_safely(main_ws, sheet_updates, workflow_run_id, "enrich_fmp", conn)
 
     return {"evaluated": len(companies), "enriched_fmp": enriched, "no_match_fmp": no_match}
 
@@ -308,7 +370,10 @@ def run_tinyfish_enrichment(
     else:
         companies = conn.execute(query).fetchall()
 
+    row_map = _build_job_row_map_safely(main_ws, workflow_run_id, "enrich_tinyfish", conn)
+
     enriched = no_match = 0
+    sheet_updates = []
     for company in companies:
         try:
             result = fetch_tinyfish_industry(company["name"], tinyfish_api_key)
@@ -336,14 +401,7 @@ def run_tinyfish_enrichment(
             ),
         )
         conn.commit()
-        try:
-            _push_to_beacon(conn, main_ws, company["id"])
-        except Exception as exc:  # a Sheets outage must not abort the whole backlog
-            if workflow_run_id is not None:
-                log_step(
-                    conn, workflow_run_id=workflow_run_id, step_name="enrich_tinyfish",
-                    step_status="beacon_push_failed", detail=f"{company['name']}: {exc}",
-                )
+        sheet_updates.extend(_company_beacon_updates(conn, company["id"], row_map))
         if result:
             enriched += 1
         else:
@@ -355,6 +413,8 @@ def run_tinyfish_enrichment(
                 step_status="ok_tinyfish" if result else "no_match",
                 detail=f"{company['name']}: {json.dumps(result) if result else 'no corroborated match -- left blank'}",
             )
+
+    _flush_beacon_updates_safely(main_ws, sheet_updates, workflow_run_id, "enrich_tinyfish", conn)
 
     return {"evaluated": len(companies), "enriched_tinyfish": enriched, "no_match_tinyfish": no_match}
 

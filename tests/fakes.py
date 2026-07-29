@@ -161,6 +161,7 @@ class FakeWorksheet:
         self.formats = []
         self.validations = []
         self.appended = []
+        self.batch_update_value_calls = []
         self.id = 0
         self.spreadsheet = _FakeSpreadsheet(sheet_id=self.id)
         self.row_count = row_count if row_count is not None else len(self.rows)
@@ -189,6 +190,15 @@ class FakeWorksheet:
                 while len(row) <= col_idx:
                     row.append("")
                 row[col_idx] = val
+
+    def batch_update(self, data, **kwargs):
+        """gspread's Worksheet.batch_update (distinct from
+        _FakeSpreadsheet.batch_update, which handles grid/formatting
+        requests): `data` is a list of {"range": ..., "values": [[...]]}
+        dicts, applied via the same per-range logic as .update()."""
+        self.batch_update_value_calls.append(data)
+        for item in data:
+            self.update(item["values"], range_name=item["range"], **kwargs)
 
     def format(self, range_name, format_dict):
         self.formats.append((range_name, format_dict))

@@ -318,7 +318,7 @@ beacon/
 
 🌍 **Make `country` a real, configurable setting** instead of a hardcoded default a few layers into `app/sources/adzuna.py`. Adzuna already covers the UK, Canada, India, Germany, Australia, and more, and this problem is not US-specific. Today's `country="us"` default and `require_us_location: true` default are just unconfigured defaults, not an architectural limit
 
-⚡ Batch Google Sheets writes (`append_rows` + in-memory duplicate-check) instead of one API call per job. The current per-job cost is what makes a large backlog slow
+⚡ **Done for the worst offenders** (salary refresh, cloud platforms refresh, company enrichment): each used to cost 2-4 Sheets API calls per job (a row lookup plus 1-3 writes), which was both a real latency cost on a large backlog and, since every write independently triggers Google's native email notification, the root cause of a live-reported notification flood. Now one row-lookup read plus one batched write per whole run, regardless of how many jobs it touches. Still open: `add_job_to_beacon`'s `append_row` (one call per brand-new job passing the Filter Engine) and visa-scan/fit-scoring's per-job cell updates aren't batched yet -- lower priority since the latter two are already naturally throttled by LLM call latency between jobs, unlike the three fixed here which had no such throttle
 
 🔄 Automatic re-validation of jobs already on the sheet against later filter-criteria changes (today, only newly-ingested jobs are checked against the *current* rules)
 

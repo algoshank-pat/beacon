@@ -16,14 +16,20 @@ redirect limitation already documented in app.salary_refresh/app.link_check
 client-side JS redirect `requests` can't follow). A job whose page can't be
 fetched, or whose fetched page still mentions nothing, is simply left as
 None; `cloud_platforms_checked_at` is stamped either way so it isn't
-retried forever."""
+retried forever.
+
+Sheets writes are batched the same way as app.salary_refresh (see its
+module docstring for the full reasoning): the row lookup reads the Job ID
+column ONCE via build_job_row_map instead of once per job, and every job's
+Cloud Platforms update is collected and flushed via a single
+batch_update_cells call at the end, instead of one API call per job."""
 from __future__ import annotations
 
 import sqlite3
 
 from app.cloud_platforms import resolve_cloud_platforms
 from app.salary_extraction import fetch_job_page_text
-from app.sheets import update_cloud_platforms
+from app.sheets import batch_update_cells, build_job_row_map, cloud_platforms_update_request
 
 
 def run_cloud_platforms_refresh(
@@ -50,7 +56,10 @@ def run_cloud_platforms_refresh(
     else:
         jobs = conn.execute(query).fetchall()
 
+    row_map = build_job_row_map(main_ws) if main_ws is not None else {}
+
     checked = found = 0
+    sheet_updates = []
     for job in jobs:
         try:
             full_text = fetch_job_page_text(job["url"])
@@ -69,7 +78,11 @@ def run_cloud_platforms_refresh(
 
         if platforms is not None:
             found += 1
-            if main_ws is not None:
-                update_cloud_platforms(main_ws, job["id"], platforms)
+            row_number = row_map.get(job["id"])
+            if row_number is not None:
+                sheet_updates.append(cloud_platforms_update_request(row_number, platforms))
+
+    if main_ws is not None:
+        batch_update_cells(main_ws, sheet_updates)
 
     return {"checked": checked, "found": found}

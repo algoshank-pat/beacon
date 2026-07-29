@@ -156,8 +156,12 @@ def test_run_fmp_enrichment_continues_past_a_beacon_push_failure(db_conn, monkey
     # A live crash during an uncapped StartupHub run showed that a Sheets
     # outage mid-loop (there, a 503 from find_existing_row) would abort the
     # rest of a large batch, even though the per-company fetch calls
-    # themselves already had this isolation. The push failure must not stop
-    # later companies in the same run from being evaluated.
+    # themselves already had this isolation. Sheets pushes are now batched
+    # across the whole run (see app.enrichment module docstring) rather than
+    # one call per company, so the failure point moved: this simulates the
+    # final batch flush itself failing, and DB enrichment must still have
+    # completed for every company regardless, since that write always
+    # happens before any Sheets interaction.
     for i in range(2):
         company_id = _company_row(db_conn, name=f"Company {i}")
         _job_row(db_conn, company_id, url=f"https://x/{i}")
@@ -165,17 +169,18 @@ def test_run_fmp_enrichment_continues_past_a_beacon_push_failure(db_conn, monkey
     monkeypatch.setattr("app.enrichment.fetch_fmp_profile", lambda name, key, session=None: {"employee_count": 1})
 
     class _ExplodingWorksheet:
-        pass
+        def col_values(self, *args, **kwargs):
+            return []
 
     def _boom(*args, **kwargs):
         raise RuntimeError("Sheets outage")
 
-    monkeypatch.setattr("app.enrichment.update_company_columns", _boom)
+    monkeypatch.setattr("app.enrichment.batch_update_cells", _boom)
 
     result = run_fmp_enrichment(db_conn, fmp_api_key="fake-key", main_ws=_ExplodingWorksheet())
 
     assert result["evaluated"] == 2
-    assert result["enriched_fmp"] == 2  # DB was still updated for both despite the push failures
+    assert result["enriched_fmp"] == 2  # DB was still updated for both despite the push failure
 
 
 def test_run_fmp_enrichment_respects_limit(db_conn, monkeypatch):

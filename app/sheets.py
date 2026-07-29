@@ -522,6 +522,82 @@ def find_existing_row(ws, job_id: int) -> int | None:
     return None
 
 
+def build_job_row_map(ws) -> dict[int, int]:
+    """Reads the Job ID column ONCE and returns {job_id: row_number} for
+    every job currently on Beacon -- the batched alternative to
+    find_existing_row's per-job full-column re-read, for callers processing
+    many jobs in one run (see app.salary_refresh, app.cloud_platforms_refresh,
+    app.enrichment). An N-job batch costs one Sheets read this way instead
+    of N, same reasoning as resync_sheet_row_numbers's own column read."""
+    job_id_values = call_with_retry(ws.col_values, JOB_ID_COL_INDEX)
+    mapping: dict[int, int] = {}
+    for i, value in enumerate(job_id_values[1:], start=2):  # skip header row
+        value = value.strip()
+        if value.isdigit():
+            mapping[int(value)] = i
+    return mapping
+
+
+def batch_update_cells(ws, updates: list[dict]) -> None:
+    """Writes many independent cell/row ranges in ONE Sheets API call via
+    ws.batch_update(), instead of one call per range. `updates` is a list of
+    {"range": "A1", "values": [[...]]} dicts, gspread's own batch_update
+    format -- see salary_range_update_request/cloud_platforms_update_request/
+    company_columns_update_requests below for the builders that produce them,
+    and app.salary_refresh/app.cloud_platforms_refresh/app.enrichment for the
+    hot-loop call sites this replaced (previously one API call per job,
+    each preceded by its own full-column find_existing_row read). No-op if
+    empty -- an empty batch_update call still costs a wasted round-trip."""
+    if not updates:
+        return
+    call_with_retry(ws.batch_update, updates, value_input_option="USER_ENTERED")
+
+
+def salary_range_update_request(
+    row_number: int, salary_min: int | None, salary_max: int | None,
+    adzuna_salary_min: int | None, adzuna_salary_max: int | None,
+) -> dict:
+    """Builds (without writing) the batch_update_cells entry for one job's
+    Salary Range cell -- see update_salary_range for the single-job
+    equivalent that looks up the row and writes immediately."""
+    col = _col_letter(SALARY_RANGE_COL_INDEX)
+    display = format_salary_range(salary_min, salary_max, adzuna_salary_min, adzuna_salary_max)
+    return {"range": f"{col}{row_number}", "values": [[display]]}
+
+
+def cloud_platforms_update_request(row_number: int, cloud_platforms: str | None) -> dict:
+    """Builds (without writing) the batch_update_cells entry for one job's
+    Cloud Platforms cell -- see update_cloud_platforms for the single-job
+    equivalent."""
+    col = _col_letter(CLOUD_PLATFORMS_COL_INDEX)
+    return {"range": f"{col}{row_number}", "values": [[cloud_platforms or ""]]}
+
+
+def company_columns_update_requests(row_number: int, company: sqlite3.Row) -> list[dict]:
+    """Builds (without writing) the 3 batch_update_cells entries for one
+    job's company-derived columns (Industry; the Employee Count..Revenue/
+    Valuation block; DOL LCA Match/Last Sponsored) -- see
+    update_company_columns for the single-job equivalent."""
+    industry_col = _col_letter(INDUSTRY_COL_INDEX)
+    start_col = _col_letter(EMPLOYEE_COUNT_COL_INDEX)
+    end_col = _col_letter(REVENUE_VALUATION_COL_INDEX)
+    lca_start_col = _col_letter(DOL_LCA_MATCH_COL_INDEX)
+    lca_end_col = _col_letter(LAST_SPONSORED_COL_INDEX)
+    return [
+        {"range": f"{industry_col}{row_number}", "values": [[company["industry"] or ""]]},
+        {"range": f"{start_col}{row_number}:{end_col}{row_number}", "values": [[
+            company["employee_count"] or company["employee_count_range"] or "",
+            company["company_type"] or "",
+            company["funding_stage"] or "",
+            company["revenue_or_valuation"] or "",
+        ]]},
+        {"range": f"{lca_start_col}{row_number}:{lca_end_col}{row_number}", "values": [[
+            company["dol_lca_employer_name"] or "",
+            _format_lca_date(company["last_lca_certified_date"]),
+        ]]},
+    ]
+
+
 def resync_sheet_row_numbers(conn: sqlite3.Connection, ws) -> int:
     """Re-reads the Job ID column and updates every currently-on-Beacon
     job's `sheet_row_number` to match its actual current row. Needed
@@ -540,12 +616,7 @@ def resync_sheet_row_numbers(conn: sqlite3.Connection, ws) -> int:
     already nulls this itself, but this costs nothing extra given the
     column read already happened). Returns the number of jobs whose stored
     row number changed."""
-    job_id_values = call_with_retry(ws.col_values, JOB_ID_COL_INDEX)
-    sheet_positions: dict[int, int] = {}
-    for i, value in enumerate(job_id_values[1:], start=2):  # skip header row
-        value = value.strip()
-        if value.isdigit():
-            sheet_positions[int(value)] = i
+    sheet_positions = build_job_row_map(ws)
 
     tracked = conn.execute(
         "SELECT id, sheet_row_number FROM jobs WHERE sheet_row_number IS NOT NULL"
@@ -752,40 +823,11 @@ def update_company_columns(ws, job_id: int, company: sqlite3.Row) -> int | None:
     row_number = find_existing_row(ws, job_id)
     if row_number is None:
         return None
-
-    industry_col = _col_letter(INDUSTRY_COL_INDEX)
-    call_with_retry(
-        ws.update,
-        values=[[company["industry"] or ""]],
-        range_name=f"{industry_col}{row_number}",
-        value_input_option="USER_ENTERED",
-    )
-
-    start_col = _col_letter(EMPLOYEE_COUNT_COL_INDEX)
-    end_col = _col_letter(REVENUE_VALUATION_COL_INDEX)
-    call_with_retry(
-        ws.update,
-        values=[[
-            company["employee_count"] or company["employee_count_range"] or "",
-            company["company_type"] or "",
-            company["funding_stage"] or "",
-            company["revenue_or_valuation"] or "",
-        ]],
-        range_name=f"{start_col}{row_number}:{end_col}{row_number}",
-        value_input_option="USER_ENTERED",
-    )
-
-    lca_start_col = _col_letter(DOL_LCA_MATCH_COL_INDEX)
-    lca_end_col = _col_letter(LAST_SPONSORED_COL_INDEX)
-    call_with_retry(
-        ws.update,
-        values=[[
-            company["dol_lca_employer_name"] or "",
-            _format_lca_date(company["last_lca_certified_date"]),
-        ]],
-        range_name=f"{lca_start_col}{row_number}:{lca_end_col}{row_number}",
-        value_input_option="USER_ENTERED",
-    )
+    # Was 3 separate ws.update() calls (industry, the Employee Count..
+    # Revenue/Valuation block, DOL LCA Match/Last Sponsored) -- collapsed
+    # into 1 batch_update_cells call. Also cuts app.lca_enrichment's
+    # per-job loop from 4 API calls/job (1 find + 3 updates) to 2.
+    batch_update_cells(ws, company_columns_update_requests(row_number, company))
     return row_number
 
 
@@ -798,10 +840,8 @@ def update_salary_range(
     row_number = find_existing_row(ws, job_id)
     if row_number is None:
         return None
-    col = _col_letter(SALARY_RANGE_COL_INDEX)
-    display = format_salary_range(salary_min, salary_max, adzuna_salary_min, adzuna_salary_max)
-    call_with_retry(
-        ws.update, values=[[display]], range_name=f"{col}{row_number}", value_input_option="USER_ENTERED"
+    batch_update_cells(
+        ws, [salary_range_update_request(row_number, salary_min, salary_max, adzuna_salary_min, adzuna_salary_max)]
     )
     return row_number
 
@@ -829,11 +869,7 @@ def update_cloud_platforms(ws, job_id: int, cloud_platforms: str) -> int | None:
     row_number = find_existing_row(ws, job_id)
     if row_number is None:
         return None
-    col = _col_letter(CLOUD_PLATFORMS_COL_INDEX)
-    call_with_retry(
-        ws.update, values=[[cloud_platforms]], range_name=f"{col}{row_number}",
-        value_input_option="USER_ENTERED",
-    )
+    batch_update_cells(ws, [cloud_platforms_update_request(row_number, cloud_platforms)])
     return row_number
 
 

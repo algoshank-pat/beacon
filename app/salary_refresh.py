@@ -23,13 +23,30 @@ NOT fetchable without executing that JS, which `requests` can't do. A job
 whose page can't be fetched, or whose fetched page still has no parseable
 salary line, is simply left with whatever it already had (real range if
 found earlier, else Adzuna's estimate); `salary_checked_at` is stamped
-either way so it isn't re-fetched forever."""
+either way so it isn't re-fetched forever.
+
+Sheets writes are batched, not one API call per job: the row lookup reads
+the Job ID column ONCE via build_job_row_map (rather than each job's own
+find_existing_row re-reading it), and every job's Salary Range update is
+collected into one list and flushed via a single batch_update_cells call
+at the end. Previously each of up to `limit` (default 200) jobs made 2 API
+calls (1 read + 1 write) every run -- both a real per-job Sheets-quota/
+latency cost and, since every write independently trips Google's native
+"Any changes are made" notification rule, a major contributor to a live-
+reported notification flood (86 emails in a 4-hour window traced back to
+exactly this kind of unbatched per-job write, across this module plus
+app.cloud_platforms_refresh/app.enrichment). Trade-off accepted: a Sheets
+outage during the single batch flush now loses this whole run's pushes
+together, not just one job's -- a coarser failure grain than before, but
+the DB write above already happened regardless (so nothing is lost, only
+delayed), and call_with_retry already retries transient errors well before
+falling through to this."""
 from __future__ import annotations
 
 import sqlite3
 
 from app.salary_extraction import resolve_posted_salary
-from app.sheets import update_salary_range
+from app.sheets import batch_update_cells, build_job_row_map, salary_range_update_request
 
 
 def run_salary_refresh(
@@ -53,7 +70,10 @@ def run_salary_refresh(
     else:
         jobs = conn.execute(query).fetchall()
 
+    row_map = build_job_row_map(main_ws) if main_ws is not None else {}
+
     checked = found = 0
+    sheet_updates = []
     for job in jobs:
         salary_min, salary_max = resolve_posted_salary(job["description"], job["url"])
         conn.execute(
@@ -67,10 +87,13 @@ def run_salary_refresh(
 
         if salary_min is not None:
             found += 1
-            if main_ws is not None:
-                update_salary_range(
-                    main_ws, job["id"], salary_min, salary_max,
-                    job["adzuna_salary_min"], job["adzuna_salary_max"],
-                )
+            row_number = row_map.get(job["id"])
+            if row_number is not None:
+                sheet_updates.append(salary_range_update_request(
+                    row_number, salary_min, salary_max, job["adzuna_salary_min"], job["adzuna_salary_max"],
+                ))
+
+    if main_ws is not None:
+        batch_update_cells(main_ws, sheet_updates)
 
     return {"checked": checked, "found": found}

@@ -5,8 +5,28 @@
    transfer anywhere, classify NO_MENTION for free -- no Haiku call. Added
    after review showed Haiku was handling ~99.7% of postings, most of which
    never reference sponsorship at all.
-3. Haiku classification, only for postings that mention one of those
-   keywords but aren't cleanly resolved by regex.
+3. Haiku classification, gated behind an explicit per-job request.
+
+Tiers 1-2 run automatically, every run, for every never-scanned job -- they
+cost nothing. A job neither tier can resolve lands at VISA_FLAG_NEEDS_REVIEW
+and STOPS there; Haiku is never called for it automatically. It only runs
+once the user sets that job's "Visa Score Request" column (see app.sheets)
+to "Request Check" -- added per direct request, after a live cost concern
+("3.6 cents is not trivial for me") surfaced that Haiku had been running
+fully automatically and unconstrained by any per-job gate the whole time
+(only a daily/monthly budget ceiling existed, and it wasn't even enforced
+until the same session -- see the budget paragraph below). This mirrors
+app.fit_scoring's "Go Score" flag pattern, applied to visa classification's
+one paid tier instead of gating the whole module.
+
+The daily_token_budget/monthly_token_budget ceiling (via app.budget.
+BudgetTracker, same tracker app.fit_scoring already used) is checked before
+every marked job's Haiku attempt, on top of the explicit per-job gate above
+-- belt and suspenders, not a replacement for it. A job whose budget check
+fails gets its "Visa Score Request" cell set to "Budget Reached" rather
+than silently staying "Processing" forever indistinguishable from a
+transient failure; both are retried automatically once there's budget/the
+API call succeeds, so nothing needs re-marking by hand.
 
 Full posting page fetched before all of the above, for every job with a URL
 (app.salary_extraction.fetch_job_page_text, the same fetch already built --
@@ -41,7 +61,14 @@ from app.budget import BudgetTracker, estimate_cost_usd
 from app.job_log import STAGE_VISA_RESTRICTED, upsert_job_log_row
 from app.observability import log_step
 from app.salary_extraction import fetch_job_page_text
-from app.sheets import remove_main_row, update_visa_flag
+from app.sheets import (
+    VISA_SCORE_REQUEST_BUDGET_REACHED,
+    VISA_SCORE_REQUEST_PROCESSING,
+    get_visa_check_requested_job_ids,
+    remove_main_row,
+    update_visa_flag,
+    update_visa_score_request,
+)
 
 HAIKU_MODEL = "claude-haiku-4-5"
 # Gemini's cheap tier, the Haiku-equivalent for this exact task. Originally
@@ -62,6 +89,11 @@ GEMINI_FLASH_MODEL = "gemini-3.5-flash-lite"
 # not here.
 VISA_FLAG_NO_MENTION = "no_mention"
 VISA_FLAG_PENDING = "pending"
+# Free tiers couldn't resolve it; Haiku is never called automatically for
+# this state -- see module docstring. Distinct from VISA_FLAG_PENDING,
+# which means Haiku WAS attempted (the job was marked) and failed
+# transiently, not that it was never asked.
+VISA_FLAG_NEEDS_REVIEW = "needs_review"
 
 # Checked case-insensitively as substrings against the description. If none
 # of these appear anywhere, there's nothing for Haiku to usefully read --
@@ -315,6 +347,54 @@ def evict_already_restricted_jobs(conn: sqlite3.Connection, main_ws, job_log_ws)
     return evicted
 
 
+def _classify_free_tiers(conn, description, job, workflow_run_id) -> tuple[str, str | None]:
+    """Regex + keyword pre-check only -- the two tiers that cost nothing and
+    always run automatically. Returns (visa_flag, snippet); visa_flag is
+    never None coming out of this (falls through to VISA_FLAG_NEEDS_REVIEW
+    rather than leaving anything unresolved)."""
+    visa_flag, snippet = regex_classify(description)
+    if visa_flag is not None:
+        return visa_flag, snippet
+    if not mentions_sponsorship_keywords(description):
+        return VISA_FLAG_NO_MENTION, None
+    return VISA_FLAG_NEEDS_REVIEW, None
+
+
+def _apply_classification_result(
+    conn, main_ws, job_log_ws, job, visa_flag, snippet, settings, workflow_run_id,
+    tokens_input=0, tokens_output=0,
+) -> bool:
+    """Shared tail end for both passes below: persists the result, evicts
+    if restricted-and-required, otherwise pushes the Sheet's Visa Flag cell,
+    and logs the step. Returns True if this call evicted the job."""
+    conn.execute(
+        "UPDATE jobs SET visa_flag = ?, visa_snippet = ? WHERE id = ?",
+        (visa_flag, snippet, job["id"]),
+    )
+    # Commit now, before any Sheets call below -- those can retry/sleep for
+    # minutes under quota pressure, and a SQLite write transaction must
+    # never stay open across a slow network call: it holds the DB's single
+    # write lock the whole time, starving any other process trying to write
+    # concurrently (hit live: a second CLI command got "database is locked"
+    # errors from exactly this).
+    conn.commit()
+
+    restricted_and_required = settings.get("require_visa_sponsorship") and visa_flag == "restricted"
+    evicted = False
+    if restricted_and_required:
+        _evict_restricted_job(conn, main_ws, job_log_ws, job, snippet)
+        evicted = True
+    elif main_ws is not None:
+        update_visa_flag(main_ws, job["id"], visa_flag)  # Sheets I/O
+
+    if workflow_run_id is not None:
+        log_step(
+            conn, workflow_run_id=workflow_run_id, job_id=job["id"], step_name="visa_scan",
+            step_status=visa_flag, detail=snippet, tokens_input=tokens_input, tokens_output=tokens_output,
+        )
+    return evicted
+
+
 def run_visa_scan(
     conn: sqlite3.Connection,
     client,
@@ -339,33 +419,22 @@ def run_visa_scan(
     if settings.get("require_visa_sponsorship"):
         already_evicted = evict_already_restricted_jobs(conn, main_ws, job_log_ws)
 
-    # Picks up never-scanned jobs AND jobs stuck at VISA_FLAG_PENDING from a
-    # prior run whose Haiku call failed -- both get retried the same way.
-    query = (
-        "SELECT * FROM jobs WHERE status = 'new' "
-        "AND (visa_flag IS NULL OR visa_flag = ?)"
-    )
-    params: tuple = (VISA_FLAG_PENDING,)
+    restricted_filtered = 0
+
+    # --- Pass 1: free tiers (regex + keyword pre-check), every never-
+    # scanned job, every run, unconditionally -- costs nothing, so nothing
+    # gates it. A job neither tier can resolve lands at
+    # VISA_FLAG_NEEDS_REVIEW and stops there (see module docstring); Haiku
+    # is Pass 2's job, below, and only for jobs explicitly marked for it. ---
+    free_tier_query = "SELECT * FROM jobs WHERE status = 'new' AND visa_flag IS NULL"
+    free_tier_params: tuple = ()
     if limit is not None:
-        query += " LIMIT ?"
-        params = params + (limit,)
-    jobs = conn.execute(query, params).fetchall()
+        free_tier_query += " LIMIT ?"
+        free_tier_params = (limit,)
+    free_tier_jobs = conn.execute(free_tier_query, free_tier_params).fetchall()
 
-    # Was documented in app.budget's own module docstring as something that
-    # "could be reused for Haiku visa classification too" but never actually
-    # wired in -- this loop ran fully unconstrained by daily_token_budget/
-    # monthly_token_budget, unlike run_fit_scoring's identical use of this
-    # same tracker. Live-reported directly: cost is not "trivial" at this
-    # user's threshold, so an unenforced budget setting is a real gap, not
-    # a cosmetic one.
-    tracker = BudgetTracker(conn, settings.get("daily_token_budget"), settings.get("monthly_token_budget"))
-
-    regex_hits = no_mention_count = haiku_calls = haiku_failures = restricted_filtered = 0
-    budget_exceeded = False
-    total_input_tokens = total_output_tokens = 0
-    total_cost = 0.0
-
-    for job in jobs:
+    regex_hits = no_mention_count = needs_review_count = 0
+    for job in free_tier_jobs:
         description = job["description"] or ""
         try:
             full_text = fetch_job_page_text(job["url"])
@@ -379,102 +448,116 @@ def run_visa_scan(
         if full_text:
             description = full_text
 
-        visa_flag, snippet = regex_classify(description)
-        tokens_input = tokens_output = 0
-
-        if visa_flag is None:
-            if not mentions_sponsorship_keywords(description):
-                visa_flag, snippet = VISA_FLAG_NO_MENTION, None
-                no_mention_count += 1
-            else:
-                if not tracker.has_budget():
-                    budget_exceeded = True
-                    if workflow_run_id is not None:
-                        log_step(
-                            conn, workflow_run_id=workflow_run_id, job_id=job["id"],
-                            step_name="visa_scan", step_status="CRITICAL",
-                            detail=(
-                                f"Token budget exceeded (daily remaining=${tracker.remaining_daily():.4f}, "
-                                f"monthly remaining=${tracker.remaining_monthly():.4f}) -- "
-                                "paused visa scanning for the rest of this run"
-                            ),
-                        )
-                    break  # remaining jobs stay unclassified/pending -- retried next run
-
-                # Needs Haiku. Mark pending *before* attempting the call --
-                # if it fails (rate limit, exhausted credit balance, network
-                # error), this job stays retryable next run instead of
-                # crashing the rest of this batch or silently staying blank.
-                conn.execute(
-                    "UPDATE jobs SET visa_flag = ? WHERE id = ?", (VISA_FLAG_PENDING, job["id"]),
-                )
-                conn.commit()
-                if main_ws is not None:
-                    update_visa_flag(main_ws, job["id"], VISA_FLAG_PENDING)
-
-                try:
-                    result, usage = classify(
-                        client, description, title=job["title"] or "", location=job["location"] or ""
-                    )
-                except Exception as exc:  # noqa: BLE001 -- one bad call must not kill the rest of the batch
-                    haiku_failures += 1
-                    if workflow_run_id is not None:
-                        log_step(
-                            conn, workflow_run_id=workflow_run_id, job_id=job["id"],
-                            step_name="visa_scan", step_status="haiku_failed", detail=str(exc),
-                        )
-                    continue  # stays VISA_FLAG_PENDING in the DB and on the Sheet -- retried next run
-
-                haiku_calls += 1
-                visa_flag = result["visa_flag"]
-                snippet = result.get("snippet") or None
-                tokens_input, tokens_output = usage["input_tokens"], usage["output_tokens"]
-                total_input_tokens += tokens_input
-                total_output_tokens += tokens_output
-                cost = estimate_cost_usd(model_name, tokens_input, tokens_output)
-                total_cost += cost
-                tracker.record_spend(cost)
+        visa_flag, snippet = _classify_free_tiers(conn, description, job, workflow_run_id)
+        if visa_flag == VISA_FLAG_NO_MENTION:
+            no_mention_count += 1
+        elif visa_flag == VISA_FLAG_NEEDS_REVIEW:
+            needs_review_count += 1
         else:
             regex_hits += 1
 
-        conn.execute(
-            "UPDATE jobs SET visa_flag = ?, visa_snippet = ? WHERE id = ?",
-            (visa_flag, snippet, job["id"]),
-        )
-        # Commit now, before any Sheets call below -- those can retry/sleep
-        # for minutes under quota pressure, and a SQLite write transaction
-        # must never stay open across a slow network call: it holds the DB's
-        # single write lock the whole time, starving any other process
-        # trying to write concurrently (hit live: a second CLI command got
-        # "database is locked" errors from exactly this).
-        conn.commit()
-
-        restricted_and_required = settings.get("require_visa_sponsorship") and visa_flag == "restricted"
-
-        if restricted_and_required:
-            _evict_restricted_job(conn, main_ws, job_log_ws, job, snippet)
+        if _apply_classification_result(conn, main_ws, job_log_ws, job, visa_flag, snippet, settings, workflow_run_id):
             restricted_filtered += 1
-        elif main_ws is not None:
-            update_visa_flag(main_ws, job["id"], visa_flag)  # Sheets I/O
 
-        if workflow_run_id is not None:
-            log_step(
-                conn,
-                workflow_run_id=workflow_run_id,
-                job_id=job["id"],
-                step_name="visa_scan",
-                step_status=visa_flag,
-                detail=snippet,
-                tokens_input=tokens_input,
-                tokens_output=tokens_output,
-            )
+    # --- Pass 2: Haiku, ONLY for jobs the user marked via the Sheet's Visa
+    # Score Request column (Request Check / Processing / Budget Reached --
+    # the latter two are this module's own retry states from an earlier
+    # attempt, not a fresh ask). A job sitting at VISA_FLAG_NEEDS_REVIEW that
+    # was never marked is untouched by this pass, indefinitely. ---
+    haiku_calls = haiku_failures = 0
+    budget_exceeded = False
+    total_input_tokens = total_output_tokens = 0
+    total_cost = 0.0
+
+    requested_ids = get_visa_check_requested_job_ids(main_ws) if main_ws is not None else set()
+    if requested_ids:
+        # Was documented in app.budget's own module docstring as something
+        # that "could be reused for Haiku visa classification too" but never
+        # actually wired in -- belt-and-suspenders on top of the per-job
+        # mark above, not a replacement for it.
+        tracker = BudgetTracker(conn, settings.get("daily_token_budget"), settings.get("monthly_token_budget"))
+        placeholders = ",".join("?" * len(requested_ids))
+        requested_jobs = conn.execute(
+            f"SELECT * FROM jobs WHERE id IN ({placeholders}) AND visa_flag = ?",
+            (*requested_ids, VISA_FLAG_NEEDS_REVIEW),
+        ).fetchall()
+
+        for job in requested_jobs:
+            if not tracker.has_budget():
+                budget_exceeded = True
+                update_visa_score_request(main_ws, job["id"], VISA_SCORE_REQUEST_BUDGET_REACHED)
+                if workflow_run_id is not None:
+                    log_step(
+                        conn, workflow_run_id=workflow_run_id, job_id=job["id"],
+                        step_name="visa_scan", step_status="CRITICAL",
+                        detail=(
+                            f"Token budget exceeded (daily remaining=${tracker.remaining_daily():.4f}, "
+                            f"monthly remaining=${tracker.remaining_monthly():.4f}) -- "
+                            "paused visa scanning for the rest of this run"
+                        ),
+                    )
+                break  # remaining marked jobs retried next run once budget resets
+
+            # Claim it -- mark Processing *before* attempting the call, so a
+            # failure (rate limit, exhausted credit balance, network error)
+            # leaves this job retryable next run instead of stuck silently.
+            update_visa_score_request(main_ws, job["id"], VISA_SCORE_REQUEST_PROCESSING)
+
+            description = job["description"] or ""
+            try:
+                full_text = fetch_job_page_text(job["url"])
+            except Exception as exc:  # noqa: BLE001 -- best-effort; stored description is the fallback
+                full_text = None
+                if workflow_run_id is not None:
+                    log_step(
+                        conn, workflow_run_id=workflow_run_id, job_id=job["id"],
+                        step_name="visa_scan", step_status="page_fetch_failed", detail=str(exc),
+                    )
+            if full_text:
+                description = full_text
+
+            try:
+                result, usage = classify(
+                    client, description, title=job["title"] or "", location=job["location"] or ""
+                )
+            except Exception as exc:  # noqa: BLE001 -- one bad call must not kill the rest of the batch
+                haiku_failures += 1
+                if workflow_run_id is not None:
+                    log_step(
+                        conn, workflow_run_id=workflow_run_id, job_id=job["id"],
+                        step_name="visa_scan", step_status="haiku_failed", detail=str(exc),
+                    )
+                continue  # stays "Processing" on the Sheet and VISA_FLAG_NEEDS_REVIEW in the DB -- retried next run
+
+            haiku_calls += 1
+            visa_flag = result["visa_flag"]
+            snippet = result.get("snippet") or None
+            tokens_input, tokens_output = usage["input_tokens"], usage["output_tokens"]
+            total_input_tokens += tokens_input
+            total_output_tokens += tokens_output
+            cost = estimate_cost_usd(model_name, tokens_input, tokens_output)
+            total_cost += cost
+            tracker.record_spend(cost)
+
+            if _apply_classification_result(
+                conn, main_ws, job_log_ws, job, visa_flag, snippet, settings, workflow_run_id,
+                tokens_input=tokens_input, tokens_output=tokens_output,
+            ):
+                restricted_filtered += 1
+            else:
+                # Request fulfilled -- clear it so the cell doesn't keep
+                # showing "Processing" forever once Visa Flag has the real
+                # answer. Not reached on the eviction path above: the row
+                # (and every cell in it, including this one) is already gone.
+                update_visa_score_request(main_ws, job["id"], "")
 
     conn.commit()
     return {
-        "scanned": len(jobs),
+        "scanned": len(free_tier_jobs),
         "already_restricted_evicted": already_evicted,
         "regex_hits": regex_hits,
         "no_mention": no_mention_count,
+        "needs_review": needs_review_count,
         "haiku_calls": haiku_calls,
         "haiku_failures": haiku_failures,
         "restricted_filtered": restricted_filtered,

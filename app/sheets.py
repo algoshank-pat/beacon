@@ -78,6 +78,15 @@ MAIN_SHEET_COLUMNS = [
     # column writes are positional, and appending needs no live data move.
     # Computed by app.cloud_platforms at ingest time from title+description.
     "Cloud Platforms",
+    # Also appended at the end, same reasoning. Gates app.visa_scan's Haiku
+    # fallback behind an explicit per-job request -- added per direct
+    # request after a live cost concern ("3.6 cents is not trivial for me"):
+    # free regex/keyword classification still runs automatically for every
+    # job (see VISA_FLAG_NEEDS_REVIEW), but Haiku is never called for one
+    # unless this column is set to "Request Check" here first. See
+    # VISA_SCORE_REQUEST_VALUES and app.visa_scan's module docstring for the
+    # full request/budget state machine.
+    "Visa Score Request",
 ]
 
 JOB_ID_COL_INDEX = MAIN_SHEET_COLUMNS.index("Job ID") + 1
@@ -95,6 +104,7 @@ EMPLOYEE_COUNT_COL_INDEX = MAIN_SHEET_COLUMNS.index("Employee Count") + 1
 REVENUE_VALUATION_COL_INDEX = MAIN_SHEET_COLUMNS.index("Revenue/Valuation") + 1
 DOL_LCA_MATCH_COL_INDEX = MAIN_SHEET_COLUMNS.index("DOL LCA Match") + 1
 LAST_SPONSORED_COL_INDEX = MAIN_SHEET_COLUMNS.index("Last Sponsored") + 1
+VISA_SCORE_REQUEST_COL_INDEX = MAIN_SHEET_COLUMNS.index("Visa Score Request") + 1
 
 DECISION_VALUES = ["Pending", "Approve", "Deny"]
 
@@ -116,6 +126,24 @@ MY_DECISION_VALUES = [
 
 APPLICATION_STATUS_VALUES = ["Applied", "Tech Rounds", "Talent Acquisition", "Panel", "Rejected"]
 
+# Visa Score Request state machine -- blank (default, nothing requested) ->
+# "Request Check" (user asks app.visa_scan to spend a Haiku call on this
+# job) -> "Processing" (app, claimed for an attempt, stays here if that
+# attempt's API call fails so it's retried automatically next time, same
+# "claim before attempting" pattern as MY_DECISION_AI_SCORE_PENDING) ->
+# cleared back to blank once Haiku actually returns a result (the real
+# answer lands in Visa Flag itself) OR "Budget Reached" (app, the day's/
+# month's token budget ran out before this job's turn -- retried
+# automatically once budget resets, same retry-eligible bucket as
+# "Processing"). See app.visa_scan for the full request/budget flow this
+# gates.
+VISA_SCORE_REQUEST_REQUEST = "Request Check"
+VISA_SCORE_REQUEST_PROCESSING = "Processing"
+VISA_SCORE_REQUEST_BUDGET_REACHED = "Budget Reached"
+VISA_SCORE_REQUEST_VALUES = [
+    VISA_SCORE_REQUEST_REQUEST, VISA_SCORE_REQUEST_PROCESSING, VISA_SCORE_REQUEST_BUDGET_REACHED,
+]
+
 # Translates app.visa_scan's internal jobs.visa_flag values to the Sheet's
 # user-facing labels -- applied only here, at write time, so the DB/pipeline
 # logic never has to know about display strings.
@@ -125,6 +153,11 @@ VISA_FLAG_LABELS = {
     "unclear": "Unclear",
     "no_mention": "No mention",
     "pending": "Visa Check Pending",
+    # Free regex/keyword tiers couldn't resolve this one -- Haiku COULD, but
+    # (per direct request) never runs unless "Visa Score Request" is set to
+    # "Request Check" first. Distinct from "pending", which means Haiku was
+    # already attempted and failed transiently.
+    "needs_review": "Needs Review",
 }
 
 
@@ -353,7 +386,7 @@ def _salary_estimate_highlight_rule_request(sheet_id, row_headroom: int, index: 
 
 
 def _apply_row_ranged_formatting(ws, row_headroom: int) -> None:
-    """(Re)builds all 3 data-validation dropdown ranges and all 5
+    """(Re)builds all 4 data-validation dropdown ranges and all 5
     conditional-format rules for a range ending at row_headroom. Shared by
     ensure_main_sheet_headers (initial setup) and ensure_beacon_capacity
     (periodic growth as the sheet fills up) so the two can never drift out
@@ -365,6 +398,7 @@ def _apply_row_ranged_formatting(ws, row_headroom: int) -> None:
     decision_col = _col_letter(DECISION_COL_INDEX)
     my_decision_col = _col_letter(MY_DECISION_COL_INDEX)
     app_status_col = _col_letter(MAIN_SHEET_COLUMNS.index("Application Status") + 1)
+    visa_score_request_col = _col_letter(VISA_SCORE_REQUEST_COL_INDEX)
 
     ws.add_validation(
         f"{decision_col}2:{decision_col}{row_headroom}",
@@ -382,6 +416,12 @@ def _apply_row_ranged_formatting(ws, row_headroom: int) -> None:
         f"{app_status_col}2:{app_status_col}{row_headroom}",
         ValidationConditionType.one_of_list,
         APPLICATION_STATUS_VALUES,
+        showCustomUi=True,
+    )
+    ws.add_validation(
+        f"{visa_score_request_col}2:{visa_score_request_col}{row_headroom}",
+        ValidationConditionType.one_of_list,
+        VISA_SCORE_REQUEST_VALUES,
         showCustomUi=True,
     )
 
@@ -665,15 +705,17 @@ def sort_and_resync_main_sheet(conn: sqlite3.Connection, ws) -> dict:
     return {"resynced": resynced, "capacity_grown": capacity_grown, "date_highlights": date_highlights}
 
 
-def _job_ids_with_my_decision(ws, eligible_values: set[str]) -> set[int]:
-    """Bulk-reads the Job ID and My Decision columns in two calls (not one
-    API call per row) and returns the set of job IDs whose My Decision cell
-    is one of eligible_values."""
+def _job_ids_with_column_value(ws, col_index: int, eligible_values: set[str]) -> set[int]:
+    """Bulk-reads the Job ID column and one other column in two calls (not
+    one API call per row) and returns the set of job IDs whose cell in that
+    other column is one of eligible_values. Shared by every "which jobs did
+    the user flag" lookup (My Decision, Visa Score Request, ...) so each one
+    is a one-line wrapper rather than its own copy of this loop."""
     job_ids = call_with_retry(ws.col_values, JOB_ID_COL_INDEX)
-    my_decisions = call_with_retry(ws.col_values, MY_DECISION_COL_INDEX)
+    other_col = call_with_retry(ws.col_values, col_index)
     matched = set()
     for idx in range(1, len(job_ids)):  # skip header at index 0
-        value = my_decisions[idx].strip() if idx < len(my_decisions) else ""
+        value = other_col[idx].strip() if idx < len(other_col) else ""
         if value not in eligible_values:
             continue
         try:
@@ -688,13 +730,25 @@ def get_scoreable_job_ids(ws) -> set[int]:
     (freshly requested) or "AI Score Pending" (claimed by an earlier run
     whose API call failed -- retried automatically). Replaces the earlier
     Score-Request-column-based get_score_requested_job_ids()."""
-    return _job_ids_with_my_decision(ws, {MY_DECISION_GO_SCORE, MY_DECISION_AI_SCORE_PENDING})
+    return _job_ids_with_column_value(ws, MY_DECISION_COL_INDEX, {MY_DECISION_GO_SCORE, MY_DECISION_AI_SCORE_PENDING})
 
 
 def get_rejected_job_ids(ws) -> set[int]:
     """Job IDs the user has flagged My Decision = "Reject" -- evicted to the
     Job Log by app.fit_scoring's rejection pass."""
-    return _job_ids_with_my_decision(ws, {MY_DECISION_REJECT})
+    return _job_ids_with_column_value(ws, MY_DECISION_COL_INDEX, {MY_DECISION_REJECT})
+
+
+def get_visa_check_requested_job_ids(ws) -> set[int]:
+    """Job IDs currently eligible for app.visa_scan's Haiku fallback:
+    flagged "Request Check" (freshly requested), "Processing" (claimed by
+    an earlier run whose API call failed -- retried automatically), or
+    "Budget Reached" (an earlier run ran out of budget before this job's
+    turn -- also retried automatically, same bucket as "Processing"). Never
+    includes a job just because its Visa Flag is "Needs Review" -- that
+    alone is NOT enough to spend a Haiku call, by direct design (see
+    app.visa_scan module docstring)."""
+    return _job_ids_with_column_value(ws, VISA_SCORE_REQUEST_COL_INDEX, set(VISA_SCORE_REQUEST_VALUES))
 
 
 def build_main_row(
@@ -895,6 +949,21 @@ def update_my_decision(ws, job_id: int, value: str) -> int | None:
     if row_number is None:
         return None
     col = _col_letter(MY_DECISION_COL_INDEX)
+    call_with_retry(
+        ws.update, values=[[value]], range_name=f"{col}{row_number}", value_input_option="USER_ENTERED"
+    )
+    return row_number
+
+
+def update_visa_score_request(ws, job_id: int, value: str) -> int | None:
+    """Updates the Visa Score Request cell on a job's existing Beacon row in
+    place -- value is one of VISA_SCORE_REQUEST_VALUES, or "" to clear it
+    once a request has been fulfilled (Haiku actually returned a result).
+    Returns the row number, or None if the job has no row there."""
+    row_number = find_existing_row(ws, job_id)
+    if row_number is None:
+        return None
+    col = _col_letter(VISA_SCORE_REQUEST_COL_INDEX)
     call_with_retry(
         ws.update, values=[[value]], range_name=f"{col}{row_number}", value_input_option="USER_ENTERED"
     )

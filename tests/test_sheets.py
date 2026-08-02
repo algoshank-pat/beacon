@@ -85,7 +85,7 @@ def test_ensure_main_sheet_headers_sets_up_when_empty():
     assert changed is True
     assert ws.rows[0] == MAIN_SHEET_COLUMNS
     assert len(ws.formats) == 1  # Decision header background
-    assert len(ws.validations) == 3
+    assert len(ws.validations) == 4
 
     decision_validation = ws.validations[0]
     assert decision_validation[1] == ValidationConditionType.one_of_list
@@ -122,7 +122,7 @@ def test_ensure_main_sheet_headers_full_rebuild_when_columns_differ():
 
     assert changed is True
     assert ws.rows[0] == MAIN_SHEET_COLUMNS
-    assert len(ws.validations) == 3
+    assert len(ws.validations) == 4
     assert len(ws.spreadsheet.batch_update_calls) == 1
     assert len(ws.spreadsheet.batch_update_calls[0]["requests"]) == 5  # Approve, Deny, Score, Industry, Salary
 
@@ -235,7 +235,7 @@ def test_ensure_beacon_capacity_grows_when_within_safety_margin():
     assert grown is True
     assert ws.row_count == 11 + 300 + 500  # data_row_count + margin + increment
     assert len(ws.spreadsheet.batch_update_calls) == 1  # one batched request, not one call per rule
-    assert len(ws.validations) == 3
+    assert len(ws.validations) == 4
 
 
 def test_ensure_beacon_capacity_replaces_rather_than_stacks_existing_rules():

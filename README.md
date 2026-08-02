@@ -95,7 +95,7 @@ Real numbers from this project's own history, not an estimate. **Software is fre
 
 AI makes exactly two decisions in this pipeline. Everything else is free, deterministic code:
 
-🛡️ **Visa check**: does this posting rule out sponsorship? Automatic on every job; free pattern-matching first, AI only for the genuinely unclear remainder.
+🛡️ **Visa check**: does this posting rule out sponsorship? Free pattern-matching runs automatically on every job. The genuinely unclear remainder lands in a "Needs Review" state and stops there; AI only runs on one of those if you flag it "Request Check" on the sheet, never automatically.
 
 🎯 **Fit score**: does this job match your resume? Only when you type `Go Score` into that row, never automatic, and never every job already sitting in your Sheet.
 
@@ -120,7 +120,8 @@ flowchart TD
     SHEET --> VISA[Visa Scanner]
     VISA -->|regex, free| FLAG[Visa Flag set]
     VISA -->|keyword pre-check, free| FLAG
-    VISA -->|genuinely ambiguous only| HAIKU[Claude Haiku]
+    VISA -->|ambiguous, free tiers only| NEEDSREVIEW["Needs Review (stops here)"]
+    NEEDSREVIEW -->|user flags 'Request Check'| HAIKU[Claude Haiku]
     HAIKU --> FLAG
     FLAG -->|restricted| JOBLOG
     SHEET -->|user flags 'Go Score'| FITSCORE[Claude Sonnet: fit score]

@@ -1,8 +1,16 @@
 import pytest
 
 from app.job_log import JOB_LOG_COLUMNS
-from app.sheets import MAIN_SHEET_COLUMNS, JOB_ID_COL_INDEX
+from app.sheets import (
+    MAIN_SHEET_COLUMNS,
+    JOB_ID_COL_INDEX,
+    VISA_SCORE_REQUEST_BUDGET_REACHED,
+    VISA_SCORE_REQUEST_COL_INDEX,
+    VISA_SCORE_REQUEST_PROCESSING,
+    VISA_SCORE_REQUEST_REQUEST,
+)
 from app.visa_scan import (
+    VISA_FLAG_NEEDS_REVIEW,
     VISA_FLAG_NO_MENTION,
     VISA_FLAG_PENDING,
     gemini_classify,
@@ -12,6 +20,19 @@ from app.visa_scan import (
     run_visa_scan,
 )
 from tests.fakes import FakeGeminiClient, FakeWorksheet
+
+
+def _requested_worksheet(*job_ids: int) -> FakeWorksheet:
+    """A Beacon worksheet with one row per job_id, each already marked
+    "Request Check" -- the explicit per-job gate Pass 2 (Haiku) requires
+    before it will spend anything on that job."""
+    rows = [MAIN_SHEET_COLUMNS]
+    for job_id in job_ids:
+        row = [""] * len(MAIN_SHEET_COLUMNS)
+        row[JOB_ID_COL_INDEX - 1] = str(job_id)
+        row[VISA_SCORE_REQUEST_COL_INDEX - 1] = VISA_SCORE_REQUEST_REQUEST
+        rows.append(row)
+    return FakeWorksheet(rows=rows)
 
 
 @pytest.fixture(autouse=True)
@@ -128,14 +149,17 @@ def test_gemini_classify_parses_structured_response():
 
 
 def test_run_visa_scan_dispatches_to_gemini_when_configured(db_conn):
-    db_conn.execute(
+    job_id = db_conn.execute(
         "INSERT INTO jobs (title, url, description, status) VALUES "
         "('SA', 'https://x/1', 'Ambiguous mention of visa policy, no clear regex match.', 'new')"
-    )
+    ).lastrowid
     db_conn.commit()
 
     client = FakeGeminiClient('{"visa_flag": "unclear", "snippet": "visa policy"}')
-    result = run_visa_scan(db_conn, client, {"require_visa_sponsorship": False}, provider="gemini")
+    main_ws = _requested_worksheet(job_id)
+    result = run_visa_scan(
+        db_conn, client, {"require_visa_sponsorship": False}, provider="gemini", main_ws=main_ws,
+    )
 
     assert result["haiku_calls"] == 1
     assert len(client.models.calls) == 1
@@ -237,7 +261,10 @@ def test_run_visa_scan_classifies_no_mention_for_free_when_no_keywords_present(d
     assert row["visa_flag"] == VISA_FLAG_NO_MENTION
 
 
-def test_run_visa_scan_falls_back_to_haiku_when_keyword_present_but_ambiguous(db_conn):
+def test_run_visa_scan_needs_review_for_free_when_keyword_present_but_ambiguous_and_unmarked(db_conn):
+    # No main_ws mark at all -- Haiku must never be called just because the
+    # free tiers found a job ambiguous. It should land at NEEDS_REVIEW and
+    # stop there.
     db_conn.execute(
         "INSERT INTO jobs (title, url, description, status) VALUES "
         "('SA', 'https://x/1', 'Please note visa status will be discussed during the interview.', 'new')"
@@ -249,37 +276,63 @@ def test_run_visa_scan_falls_back_to_haiku_when_keyword_present_but_ambiguous(db
 
     assert result["regex_hits"] == 0
     assert result["no_mention"] == 0
-    assert result["haiku_calls"] == 1
+    assert result["needs_review"] == 1
+    assert result["haiku_calls"] == 0
+    assert client.messages.calls == []  # no Haiku call made at all
     row = db_conn.execute("SELECT visa_flag FROM jobs").fetchone()
-    assert row["visa_flag"] == "unclear"
+    assert row["visa_flag"] == VISA_FLAG_NEEDS_REVIEW
 
 
-def test_run_visa_scan_stops_calling_haiku_once_daily_budget_exhausted(db_conn):
-    for i in range(2):
-        db_conn.execute(
-            "INSERT INTO jobs (title, url, description, status) VALUES (?, ?, "
-            "'Please note visa status will be discussed during the interview.', 'new')",
-            (f"SA {i}", f"https://x/{i}"),
-        )
+def test_run_visa_scan_calls_haiku_once_marked_request_check(db_conn):
+    job_id = db_conn.execute(
+        "INSERT INTO jobs (title, url, description, status) VALUES "
+        "('SA', 'https://x/1', 'Please note visa status will be discussed during the interview.', 'new')"
+    ).lastrowid
     db_conn.commit()
 
     client = _FakeClient('{"visa_flag": "unclear", "snippet": ""}')
+    main_ws = _requested_worksheet(job_id)
+    result = run_visa_scan(db_conn, client, {"require_visa_sponsorship": False}, main_ws=main_ws)
+
+    assert result["needs_review"] == 1  # Pass 1 still resolves it to NEEDS_REVIEW first
+    assert result["haiku_calls"] == 1  # then Pass 2 picks it up since it was marked
+    row = db_conn.execute("SELECT visa_flag FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    assert row["visa_flag"] == "unclear"
+    row_dict = dict(zip(MAIN_SHEET_COLUMNS, main_ws.rows[1]))
+    assert row_dict["Visa Score Request"] == ""  # cleared once fulfilled
+
+
+def test_run_visa_scan_stops_calling_haiku_once_daily_budget_exhausted(db_conn):
+    job_ids = []
+    for i in range(2):
+        job_ids.append(db_conn.execute(
+            "INSERT INTO jobs (title, url, description, status) VALUES (?, ?, "
+            "'Please note visa status will be discussed during the interview.', 'new')",
+            (f"SA {i}", f"https://x/{i}"),
+        ).lastrowid)
+    db_conn.commit()
+
+    client = _FakeClient('{"visa_flag": "unclear", "snippet": ""}')
+    main_ws = _requested_worksheet(*job_ids)  # both marked -- budget, not the mark, is what blocks job 2
     # Default fake usage is 100 input + 20 output tokens per call -> $0.0002
     # at claude-haiku-4-5's $1.00/$5.00-per-MTok rate (see app.budget
     # PRICING_PER_MTOK). A $0.00015 budget lets the first call through
     # (checked before any spend happens) but blocks the second.
     result = run_visa_scan(
-        db_conn, client, {"require_visa_sponsorship": False, "daily_token_budget": 0.00015},
+        db_conn, client, {"require_visa_sponsorship": False, "daily_token_budget": 0.00015}, main_ws=main_ws,
     )
 
+    assert result["needs_review"] == 2  # Pass 1 resolves both to NEEDS_REVIEW regardless of budget
     assert result["haiku_calls"] == 1
     assert result["budget_exceeded"] is True
     flags = [row["visa_flag"] for row in db_conn.execute("SELECT visa_flag FROM jobs ORDER BY id")]
-    # 2nd job never reached the pending-marking step, let alone Haiku -- the
-    # budget check runs before that write -- so it stays NULL, not "pending".
-    # Both satisfy the query's "visa_flag IS NULL OR visa_flag = pending"
-    # retry condition equally, so it's picked up again next run regardless.
-    assert flags == ["unclear", None]
+    # Job 2 never reached Haiku -- stays NEEDS_REVIEW, retried next run since
+    # its "Visa Score Request" mark is untouched by the budget-exceeded path
+    # below (only set to "Budget Reached" for the job budget ran out ON, not
+    # every job still waiting behind it).
+    assert flags == ["unclear", VISA_FLAG_NEEDS_REVIEW]
+    row_dict_2 = dict(zip(MAIN_SHEET_COLUMNS, main_ws.rows[2]))
+    assert row_dict_2["Visa Score Request"] == VISA_SCORE_REQUEST_BUDGET_REACHED
 
 
 def test_run_visa_scan_regex_and_no_mention_paths_unaffected_by_exhausted_budget(db_conn):
@@ -304,7 +357,7 @@ def test_run_visa_scan_regex_and_no_mention_paths_unaffected_by_exhausted_budget
     assert result["budget_exceeded"] is False  # never attempted a Haiku call, so never tripped
 
 
-def test_run_visa_scan_marks_pending_before_haiku_call_and_retries_on_failure(db_conn):
+def test_run_visa_scan_marks_processing_before_haiku_call_and_retries_on_failure(db_conn):
     job_id = db_conn.execute(
         "INSERT INTO jobs (title, url, description, status) VALUES "
         "('SA', 'https://x/1', 'Visa sponsorship details available on request.', 'new')"
@@ -319,22 +372,25 @@ def test_run_visa_scan_marks_pending_before_haiku_call_and_retries_on_failure(db
         def __init__(self):
             self.messages = self._Messages()
 
-    result = run_visa_scan(db_conn, _FailingClient(), {"require_visa_sponsorship": False})
+    main_ws = _requested_worksheet(job_id)
+    result = run_visa_scan(db_conn, _FailingClient(), {"require_visa_sponsorship": False}, main_ws=main_ws)
 
     assert result["haiku_calls"] == 0
     assert result["haiku_failures"] == 1
     row = db_conn.execute("SELECT visa_flag FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    assert row["visa_flag"] == VISA_FLAG_PENDING  # stays retryable, not blank, not crashed
+    assert row["visa_flag"] == VISA_FLAG_NEEDS_REVIEW  # unchanged -- Haiku never actually returned anything
+    row_dict = dict(zip(MAIN_SHEET_COLUMNS, main_ws.rows[1]))
+    assert row_dict["Visa Score Request"] == VISA_SCORE_REQUEST_PROCESSING  # stays retryable, not cleared
 
 
 def test_run_visa_scan_a_failed_call_does_not_abort_the_rest_of_the_batch(db_conn):
-    db_conn.execute(
+    job_id_1 = db_conn.execute(
         "INSERT INTO jobs (title, url, description, status) VALUES "
         "('SA', 'https://x/1', 'Visa sponsorship details available on request.', 'new')"
-    )
+    ).lastrowid
     job_id_2 = db_conn.execute(
         "INSERT INTO jobs (title, url, description, status) VALUES "
-        "('SA', 'https://x/2', 'We will sponsor a work visa for this role.', 'new')"
+        "('SA', 'https://x/2', 'Please note visa status is discussed at interview time.', 'new')"
     ).lastrowid
     db_conn.commit()
 
@@ -345,36 +401,75 @@ def test_run_visa_scan_a_failed_call_does_not_abort_the_rest_of_the_batch(db_con
 
             def create(self, **kwargs):
                 self.calls += 1
-                raise RuntimeError("credit balance is too low")
+                if self.calls == 1:
+                    raise RuntimeError("credit balance is too low")
+                return _FakeResponse('{"visa_flag": "sponsors", "snippet": "discussed at interview"}')
 
         def __init__(self):
             self.messages = self._Messages()
 
-    result = run_visa_scan(db_conn, _FailOnceClient(), {"require_visa_sponsorship": False})
+    main_ws = _requested_worksheet(job_id_1, job_id_2)
+    result = run_visa_scan(db_conn, _FailOnceClient(), {"require_visa_sponsorship": False}, main_ws=main_ws)
 
-    assert result["scanned"] == 2
+    assert result["needs_review"] == 2
     assert result["haiku_failures"] == 1
-    # job 2 was regex-confident and never needed Haiku at all -- must still
-    # be processed even though job 1's Haiku call failed first
+    assert result["haiku_calls"] == 1
+    # job 2's Haiku call must still happen even though job 1's failed first
     row2 = db_conn.execute("SELECT visa_flag FROM jobs WHERE id = ?", (job_id_2,)).fetchone()
     assert row2["visa_flag"] == "sponsors"
 
 
-def test_run_visa_scan_retries_a_previously_pending_job(db_conn):
+def test_run_visa_scan_retries_a_job_stuck_processing_from_a_prior_failed_attempt(db_conn):
+    # Simulates the retry case: a previous run already resolved this job to
+    # NEEDS_REVIEW and attempted Haiku, but that attempt failed, leaving
+    # "Visa Score Request" at "Processing" (not cleared, not "Budget
+    # Reached"). It must be retried automatically -- the user shouldn't have
+    # to re-mark "Request Check" themselves.
     job_id = db_conn.execute(
         "INSERT INTO jobs (title, url, description, status, visa_flag) VALUES "
         "('SA', 'https://x/1', 'Visa sponsorship details available on request.', 'new', ?)",
-        (VISA_FLAG_PENDING,),
+        (VISA_FLAG_NEEDS_REVIEW,),
     ).lastrowid
     db_conn.commit()
 
-    client = _FakeClient('{"visa_flag": "sponsors", "snippet": "details available"}')
-    result = run_visa_scan(db_conn, client, {"require_visa_sponsorship": False})
+    rows = [MAIN_SHEET_COLUMNS]
+    row = [""] * len(MAIN_SHEET_COLUMNS)
+    row[JOB_ID_COL_INDEX - 1] = str(job_id)
+    row[VISA_SCORE_REQUEST_COL_INDEX - 1] = VISA_SCORE_REQUEST_PROCESSING
+    rows.append(row)
+    main_ws = FakeWorksheet(rows=rows)
 
-    assert result["scanned"] == 1
-    assert result["haiku_calls"] == 1
+    client = _FakeClient('{"visa_flag": "sponsors", "snippet": "details available"}')
+    result = run_visa_scan(db_conn, client, {"require_visa_sponsorship": False}, main_ws=main_ws)
+
+    assert result["scanned"] == 0  # Pass 1 skips it -- visa_flag is not NULL
+    assert result["haiku_calls"] == 1  # Pass 2 retries it via the "Processing" mark
     row = db_conn.execute("SELECT visa_flag FROM jobs WHERE id = ?", (job_id,)).fetchone()
     assert row["visa_flag"] == "sponsors"
+
+
+def test_run_visa_scan_retries_a_job_stuck_at_budget_reached(db_conn):
+    # Same retry guarantee, for the other non-cleared request state.
+    job_id = db_conn.execute(
+        "INSERT INTO jobs (title, url, description, status, visa_flag) VALUES "
+        "('SA', 'https://x/1', 'Visa sponsorship details available on request.', 'new', ?)",
+        (VISA_FLAG_NEEDS_REVIEW,),
+    ).lastrowid
+    db_conn.commit()
+
+    rows = [MAIN_SHEET_COLUMNS]
+    row = [""] * len(MAIN_SHEET_COLUMNS)
+    row[JOB_ID_COL_INDEX - 1] = str(job_id)
+    row[VISA_SCORE_REQUEST_COL_INDEX - 1] = VISA_SCORE_REQUEST_BUDGET_REACHED
+    rows.append(row)
+    main_ws = FakeWorksheet(rows=rows)
+
+    client = _FakeClient('{"visa_flag": "restricted", "snippet": "details available"}')
+    result = run_visa_scan(db_conn, client, {"require_visa_sponsorship": False}, main_ws=main_ws)
+
+    assert result["haiku_calls"] == 1
+    row = db_conn.execute("SELECT visa_flag FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    assert row["visa_flag"] == "restricted"
 
 
 def test_run_visa_scan_filters_restricted_when_required(db_conn):

@@ -60,6 +60,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.config import get_settings
 from app.dates import CENTRAL
 from app.db import get_connection
 from app.filter_settings import get_filter_settings
@@ -200,6 +201,33 @@ def run_approval_poll_job() -> None:
     logger.info("Approval poll finished")
 
 
+def run_job_log_cleanup_job() -> None:
+    """Weekly Job Log retention cleanup — deletes rows older than 60 days
+    to prevent unbounded growth. The live incident that prompted this: 28k
+    rows accumulated with no retention policy."""
+    logger.info("Job Log cleanup starting")
+    try:
+        from app.job_log import cleanup_old_rows
+        from app.sheets import resolve_job_log_worksheet
+
+        settings = get_settings()
+        filter_settings = get_filter_settings(get_connection())
+        ws = resolve_job_log_worksheet(settings, filter_settings)
+
+        if ws is None:
+            logger.info("  skipped: Job Log sheet not configured")
+            return
+
+        result = cleanup_old_rows(ws, days_old=60)
+        logger.info(
+            "  deleted %s/%s rows (older than 60 days)",
+            result["deleted"], result["evaluated"],
+        )
+    except Exception:
+        logger.exception("Job Log cleanup crashed")
+    logger.info("Job Log cleanup finished")
+
+
 def _approval_poll_interval_minutes() -> int:
     """Read once at startup -- like the main pipeline's fixed cron hours,
     this doesn't hot-reload mid-process; edit filter_settings and restart
@@ -268,6 +296,18 @@ def main() -> None:
         IntervalTrigger(minutes=_approval_poll_interval_minutes(), timezone=CENTRAL),
         id="approval_poll",
         misfire_grace_time=3600 * 6,
+        coalesce=True,
+    )
+
+    # Job Log cleanup: weekly retention policy, runs Sunday at midnight. Deletes
+    # rows older than 60 days to prevent unbounded growth (live incident: 28k
+    # rows with no cleanup). Best-effort; a Sheets outage doesn't block the
+    # rest of the scheduler.
+    scheduler.add_job(
+        run_job_log_cleanup_job,
+        CronTrigger(day_of_week="6", hour=0, minute=0, timezone=CENTRAL),  # Sunday midnight
+        id="job_log_cleanup",
+        misfire_grace_time=3600 * 24,  # up to 24 hours grace if the process is down
         coalesce=True,
     )
 

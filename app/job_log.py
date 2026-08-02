@@ -10,15 +10,19 @@ flagging a job to reconsider. Gated by filter_settings.job_log_enabled
 (default true) -- callers pass job_log_ws=None to skip writes entirely (and
 avoid the Sheets API calls) when disabled, rather than this module checking
 the setting itself.
+
+Retention policy: rows older than 60 days (see cleanup_old_rows below) are
+automatically deleted weekly to prevent unbounded growth. A live incident:
+the Job Log grew to 28k rows with no retention, making the sheet unwieldy.
 """
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from gspread.utils import ValidationConditionType
 
-from app.dates import format_central
+from app.dates import format_central, parse_datetime
 from app.sheets import _format_lca_date, display_visa_flag, format_salary_range
 from app.sheets_retry import call_with_retry
 
@@ -293,3 +297,41 @@ def upsert_job_log_row(
             range_name=f"{_col_letter(decision_idx + 2)}{existing_row}:{_col_letter(len(JOB_LOG_COLUMNS))}{existing_row}",
             value_input_option="USER_ENTERED",
         )
+
+
+def cleanup_old_rows(ws, days_old: int = 60) -> dict:
+    """Deletes rows from the Job Log that are older than the specified number
+    of days (default 60). The Job Log is append-only for evicted jobs and has
+    no other cleanup mechanism -- without this, it grows unbounded and becomes
+    unwieldy (live incident: 28k rows). Meant to run periodically (weekly) via
+    the scheduler. Returns a dict with 'deleted' count and 'evaluated' total.
+
+    Deletion is FINAL and unrecoverable (no archive step) -- this is
+    intentional, for a "filter jobs by age" workflow the user can implement
+    via a separate sheet/export if needed. Deletes rows in reverse order (from
+    bottom up) so row indices don't shift during deletion."""
+    if ws is None:
+        return {"deleted": 0, "evaluated": 0}
+
+    all_values = call_with_retry(ws.col_values, JOB_LOG_COLUMNS.index("Last Updated") + 1)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_old)
+
+    # Collect row indices (1-based) to delete, starting from the bottom so
+    # deletion doesn't shift indices of rows we haven't processed yet.
+    rows_to_delete = []
+    for idx, cell_value in enumerate(all_values[1:], start=2):  # skip header
+        if not cell_value or cell_value.strip() == "":
+            continue
+        try:
+            last_updated = parse_datetime(cell_value)
+            if last_updated and last_updated < cutoff:
+                rows_to_delete.append(idx)
+        except (ValueError, TypeError):
+            # Unparseable date -- leave it alone
+            continue
+
+    # Delete in reverse order so indices don't shift
+    for row_idx in reversed(rows_to_delete):
+        call_with_retry(ws.delete_rows, row_idx)
+
+    return {"deleted": len(rows_to_delete), "evaluated": len(all_values) - 1}

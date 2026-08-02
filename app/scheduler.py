@@ -1,4 +1,4 @@
-"""Persistent scheduler process. Keeps running, firing four independent jobs:
+"""Persistent scheduler process. Keeps running, firing several independent jobs:
 
 - the automatic pipeline (ingest -> filter -> visa-scan), 3x/day at 8am/1pm/6pm
 - fit-scoring, separately, 5 minutes after each of those same three times --
@@ -26,6 +26,20 @@
   daily-tracking fix made any frequency safe, then split into these two
   independently-paced passes so StartupHub's free volume stopped being
   needlessly throttled by FMP's scarce one.
+- Job Log cleanup, weekly (Sunday midnight) -- deletes rows older than 60
+  days to prevent unbounded growth (see app.job_log.cleanup_old_rows).
+- health check, daily at 7:45am (before the main pipeline's first run) --
+  logs a warning if visa-restricted jobs are stuck on Beacon or the Job Log
+  has grown past a threshold (see app.health_check). Never fixes anything,
+  only surfaces drift a human would otherwise have to notice by eyeballing
+  row counts -- which is exactly how both live incidents above were found.
+- nightly restart, daily at 3am -- spawns a fresh scheduler process and
+  exits this one (see run_nightly_restart_job), so a code change committed
+  during the day is running within 24 hours even if nobody manually
+  restarts the process. Fixes a live gap: this process ran for days on
+  code that predated several bug fixes, since nothing restarted it on
+  deploy and there was no way to tell from the log alone that it was stale
+  (see _git_commit_info, logged once at every startup for exactly that).
 
 Windows Task Scheduler's only job is keeping THIS process alive (run at
 startup, restart on failure) -- the actual scheduling logic lives here via
@@ -41,6 +55,7 @@ Run directly: `python -m app.scheduler`
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -232,6 +247,80 @@ def run_job_log_cleanup_job() -> None:
     logger.info("Job Log cleanup finished")
 
 
+def run_health_check_job() -> None:
+    """Daily sanity check for silent data-lifecycle drift (see
+    app.health_check module docstring) -- just logs a warning per finding.
+    Two live incidents prompted this: 443 visa-restricted jobs sat on
+    Beacon unevicted, and the Job Log grew to 28k rows, both unnoticed for a
+    while since neither failure raises an exception anywhere a human would
+    see it."""
+    logger.info("Health check starting")
+    try:
+        from app.health_check import JOB_LOG_ROW_WARNING_THRESHOLD, check_health
+        from app.job_log import resolve_job_log_worksheet
+
+        settings = get_settings()
+        conn = get_connection()
+        try:
+            filter_settings = get_filter_settings(conn)
+            job_log_ws = resolve_job_log_worksheet(settings, filter_settings)
+            result = check_health(conn, job_log_ws=job_log_ws)
+        finally:
+            conn.close()
+
+        stuck = result["stuck_restricted_on_beacon"]
+        if stuck > 0:
+            logger.warning(
+                "  %s visa-restricted job(s) still on Beacon -- should have been evicted; "
+                "check require_visa_sponsorship and app.visa_scan.evict_already_restricted_jobs", stuck,
+            )
+        else:
+            logger.info("  0 visa-restricted jobs stuck on Beacon")
+
+        row_count = result["job_log_row_count"]
+        if row_count is None:
+            logger.info("  Job Log row count: unavailable (not configured, or a Sheets outage)")
+        elif row_count > JOB_LOG_ROW_WARNING_THRESHOLD:
+            logger.warning(
+                "  Job Log has %s rows (over the %s warning threshold) -- "
+                "check run_job_log_cleanup_job is actually running",
+                row_count, JOB_LOG_ROW_WARNING_THRESHOLD,
+            )
+        else:
+            logger.info("  Job Log row count: %s", row_count)
+    except Exception:
+        logger.exception("Health check crashed")
+    logger.info("Health check finished")
+
+
+def run_nightly_restart_job() -> None:
+    """Spawns a fresh scheduler process and exits this one -- the fix for
+    the deploy-drift gap found live: a code change never takes effect in a
+    long-running process until it restarts, and nothing was doing that
+    automatically, so a scheduler ran for days on code that predated
+    several bug fixes. Spawned detached so the new process survives after
+    this one exits. This process's OS-level single-instance lock (see
+    acquire_single_instance_lock) releases the moment this process's file
+    handle closes -- including via os._exit below -- the same "auto-
+    releases on crash/kill, no stale file to clean up" contract that lock
+    already relies on, so the fresh process can acquire it right after."""
+    logger.info("Nightly restart: spawning a fresh scheduler process (commit %s)", _git_commit_info())
+    import subprocess
+    import time
+
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+    subprocess.Popen(
+        [sys.executable, "-m", "app.scheduler"], cwd=PROJECT_ROOT, creationflags=creationflags,
+    )
+    # Give the new process a moment to start up and attempt the lock before
+    # this one releases it by exiting.
+    time.sleep(2)
+    logger.info("Nightly restart: new process spawned, exiting this one now")
+    os._exit(0)  # skip cleanup/atexit -- the fresh child is already running
+
+
 def _approval_poll_interval_minutes() -> int:
     """Read once at startup -- like the main pipeline's fixed cron hours,
     this doesn't hot-reload mid-process; edit filter_settings and restart
@@ -339,6 +428,31 @@ def main() -> None:
         CronTrigger(day_of_week="6", hour=0, minute=0, timezone=CENTRAL),  # Sunday midnight
         id="job_log_cleanup",
         misfire_grace_time=3600 * 24,  # up to 24 hours grace if the process is down
+        coalesce=True,
+    )
+
+    # Health check: daily, before the main pipeline's first run -- surfaces
+    # the two kinds of silent drift a live incident hit (visa-restricted
+    # jobs stuck on Beacon; Job Log growing unbounded) as a log warning
+    # instead of waiting for someone to notice by eyeballing row counts.
+    scheduler.add_job(
+        run_health_check_job,
+        CronTrigger(hour=7, minute=45, timezone=CENTRAL),
+        id="health_check",
+        misfire_grace_time=3600 * 6,
+        coalesce=True,
+    )
+
+    # Nightly restart: fixes the deploy-drift gap a live incident hit --
+    # this process kept running days-old code after several bug fixes had
+    # already been committed, since nothing restarts it automatically.
+    # 3am Central, clear of every other schedule here (8am/1pm/6pm pipeline,
+    # 7:45am health check, Sunday-midnight Job Log cleanup).
+    scheduler.add_job(
+        run_nightly_restart_job,
+        CronTrigger(hour=3, minute=0, timezone=CENTRAL),
+        id="nightly_restart",
+        misfire_grace_time=3600 * 6,
         coalesce=True,
     )
 

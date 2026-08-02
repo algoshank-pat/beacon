@@ -71,8 +71,9 @@ from app.pipeline import (
     run_scheduled_fit_scoring,
 )
 
-LOG_PATH = Path(__file__).resolve().parent.parent / "scheduler.log"
-LOCK_PATH = Path(__file__).resolve().parent.parent / "scheduler.lock"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LOG_PATH = PROJECT_ROOT / "scheduler.log"
+LOCK_PATH = PROJECT_ROOT / "scheduler.lock"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -242,12 +243,39 @@ def _approval_poll_interval_minutes() -> int:
         conn.close()
 
 
+def _git_commit_info() -> str:
+    """Short commit hash (+ "-dirty" if uncommitted changes) this running
+    process was launched from, or "unknown" if `git` isn't on PATH / this
+    isn't a git checkout. Logged once at startup so `scheduler.log` alone
+    answers "is this process actually running today's code" -- a live gap
+    found directly: a scheduler process kept running for days after several
+    bug fixes had already been committed, because nothing restarts it
+    automatically on a deploy, and there was no way to tell from the log
+    alone that it was stale."""
+    import subprocess
+
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_ROOT,
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+        dirty = bool(subprocess.run(
+            ["git", "status", "--porcelain"], cwd=PROJECT_ROOT,
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip())
+        return f"{commit}-dirty" if dirty else commit
+    except Exception:  # noqa: BLE001 -- git absent/not a checkout must not block startup
+        return "unknown"
+
+
 def main() -> None:
     try:
         lock_file = acquire_single_instance_lock()
     except SchedulerAlreadyRunningError as exc:
         logger.error(str(exc))
         sys.exit(1)
+
+    logger.info("Running code at commit %s", _git_commit_info())
 
     scheduler = BlockingScheduler(timezone=CENTRAL)
 

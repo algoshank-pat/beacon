@@ -254,6 +254,56 @@ def test_run_visa_scan_falls_back_to_haiku_when_keyword_present_but_ambiguous(db
     assert row["visa_flag"] == "unclear"
 
 
+def test_run_visa_scan_stops_calling_haiku_once_daily_budget_exhausted(db_conn):
+    for i in range(2):
+        db_conn.execute(
+            "INSERT INTO jobs (title, url, description, status) VALUES (?, ?, "
+            "'Please note visa status will be discussed during the interview.', 'new')",
+            (f"SA {i}", f"https://x/{i}"),
+        )
+    db_conn.commit()
+
+    client = _FakeClient('{"visa_flag": "unclear", "snippet": ""}')
+    # Default fake usage is 100 input + 20 output tokens per call -> $0.0002
+    # at claude-haiku-4-5's $1.00/$5.00-per-MTok rate (see app.budget
+    # PRICING_PER_MTOK). A $0.00015 budget lets the first call through
+    # (checked before any spend happens) but blocks the second.
+    result = run_visa_scan(
+        db_conn, client, {"require_visa_sponsorship": False, "daily_token_budget": 0.00015},
+    )
+
+    assert result["haiku_calls"] == 1
+    assert result["budget_exceeded"] is True
+    flags = [row["visa_flag"] for row in db_conn.execute("SELECT visa_flag FROM jobs ORDER BY id")]
+    # 2nd job never reached the pending-marking step, let alone Haiku -- the
+    # budget check runs before that write -- so it stays NULL, not "pending".
+    # Both satisfy the query's "visa_flag IS NULL OR visa_flag = pending"
+    # retry condition equally, so it's picked up again next run regardless.
+    assert flags == ["unclear", None]
+
+
+def test_run_visa_scan_regex_and_no_mention_paths_unaffected_by_exhausted_budget(db_conn):
+    db_conn.execute(
+        "INSERT INTO jobs (title, url, description, status) VALUES "
+        "('SA', 'https://x/1', 'We are unable to sponsor visas at this time.', 'new')"
+    )
+    db_conn.execute(
+        "INSERT INTO jobs (title, url, description, status) VALUES "
+        "('SA2', 'https://x/2', 'This role focuses on integration architecture.', 'new')"
+    )
+    db_conn.commit()
+
+    client = _FakeClient()
+    result = run_visa_scan(
+        db_conn, client, {"require_visa_sponsorship": False, "daily_token_budget": 0.0},
+    )
+
+    assert result["regex_hits"] == 1
+    assert result["no_mention"] == 1
+    assert result["haiku_calls"] == 0
+    assert result["budget_exceeded"] is False  # never attempted a Haiku call, so never tripped
+
+
 def test_run_visa_scan_marks_pending_before_haiku_call_and_retries_on_failure(db_conn):
     job_id = db_conn.execute(
         "INSERT INTO jobs (title, url, description, status) VALUES "

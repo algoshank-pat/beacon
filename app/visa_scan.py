@@ -37,7 +37,7 @@ import json
 import re
 import sqlite3
 
-from app.budget import estimate_cost_usd
+from app.budget import BudgetTracker, estimate_cost_usd
 from app.job_log import STAGE_VISA_RESTRICTED, upsert_job_log_row
 from app.observability import log_step
 from app.salary_extraction import fetch_job_page_text
@@ -351,7 +351,17 @@ def run_visa_scan(
         params = params + (limit,)
     jobs = conn.execute(query, params).fetchall()
 
+    # Was documented in app.budget's own module docstring as something that
+    # "could be reused for Haiku visa classification too" but never actually
+    # wired in -- this loop ran fully unconstrained by daily_token_budget/
+    # monthly_token_budget, unlike run_fit_scoring's identical use of this
+    # same tracker. Live-reported directly: cost is not "trivial" at this
+    # user's threshold, so an unenforced budget setting is a real gap, not
+    # a cosmetic one.
+    tracker = BudgetTracker(conn, settings.get("daily_token_budget"), settings.get("monthly_token_budget"))
+
     regex_hits = no_mention_count = haiku_calls = haiku_failures = restricted_filtered = 0
+    budget_exceeded = False
     total_input_tokens = total_output_tokens = 0
     total_cost = 0.0
 
@@ -377,6 +387,20 @@ def run_visa_scan(
                 visa_flag, snippet = VISA_FLAG_NO_MENTION, None
                 no_mention_count += 1
             else:
+                if not tracker.has_budget():
+                    budget_exceeded = True
+                    if workflow_run_id is not None:
+                        log_step(
+                            conn, workflow_run_id=workflow_run_id, job_id=job["id"],
+                            step_name="visa_scan", step_status="CRITICAL",
+                            detail=(
+                                f"Token budget exceeded (daily remaining=${tracker.remaining_daily():.4f}, "
+                                f"monthly remaining=${tracker.remaining_monthly():.4f}) -- "
+                                "paused visa scanning for the rest of this run"
+                            ),
+                        )
+                    break  # remaining jobs stay unclassified/pending -- retried next run
+
                 # Needs Haiku. Mark pending *before* attempting the call --
                 # if it fails (rate limit, exhausted credit balance, network
                 # error), this job stays retryable next run instead of
@@ -407,7 +431,9 @@ def run_visa_scan(
                 tokens_input, tokens_output = usage["input_tokens"], usage["output_tokens"]
                 total_input_tokens += tokens_input
                 total_output_tokens += tokens_output
-                total_cost += estimate_cost_usd(model_name, tokens_input, tokens_output)
+                cost = estimate_cost_usd(model_name, tokens_input, tokens_output)
+                total_cost += cost
+                tracker.record_spend(cost)
         else:
             regex_hits += 1
 
@@ -452,6 +478,7 @@ def run_visa_scan(
         "haiku_calls": haiku_calls,
         "haiku_failures": haiku_failures,
         "restricted_filtered": restricted_filtered,
+        "budget_exceeded": budget_exceeded,
         "tokens_input": total_input_tokens,
         "tokens_output": total_output_tokens,
         "estimated_cost_usd": total_cost,

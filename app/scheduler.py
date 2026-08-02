@@ -207,11 +207,14 @@ def run_job_log_cleanup_job() -> None:
     rows accumulated with no retention policy."""
     logger.info("Job Log cleanup starting")
     try:
-        from app.job_log import cleanup_old_rows
-        from app.sheets import resolve_job_log_worksheet
+        from app.job_log import cleanup_old_rows, resolve_job_log_worksheet
 
         settings = get_settings()
-        filter_settings = get_filter_settings(get_connection())
+        conn = get_connection()
+        try:
+            filter_settings = get_filter_settings(conn)
+        finally:
+            conn.close()
         ws = resolve_job_log_worksheet(settings, filter_settings)
 
         if ws is None:

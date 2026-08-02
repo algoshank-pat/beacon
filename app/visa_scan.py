@@ -263,6 +263,58 @@ VISA_CLASSIFIERS = {
 }
 
 
+def _evict_restricted_job(
+    conn: sqlite3.Connection, main_ws, job_log_ws, job: sqlite3.Row, snippet: str | None,
+) -> bool:
+    """Shared eviction logic for a job whose visa_flag is "restricted" and
+    require_visa_sponsorship is on -- used both by the per-job classification
+    loop below and by evict_already_restricted_jobs (for jobs classified
+    "restricted" under an earlier require_visa_sponsorship=False, which never
+    went through this path the first time). Returns True if a Beacon row was
+    actually found and removed."""
+    removed = False
+    if main_ws is not None:
+        removed = remove_main_row(main_ws, job["id"])  # Sheets I/O
+        if removed:
+            conn.execute("UPDATE jobs SET sheet_row_number = NULL WHERE id = ?", (job["id"],))
+            conn.commit()  # before any further Sheets I/O
+
+    conn.execute(
+        "UPDATE jobs SET status = 'filtered_out', rejection_reason = ? WHERE id = ?",
+        (STAGE_VISA_RESTRICTED, job["id"]),
+    )
+    conn.commit()  # before the Job Log Sheets call below
+
+    if job_log_ws is not None:
+        company = None
+        if job["company_id"] is not None:
+            company = conn.execute("SELECT * FROM companies WHERE id = ?", (job["company_id"],)).fetchone()
+        reason = f"{STAGE_VISA_RESTRICTED}: {snippet}" if snippet else STAGE_VISA_RESTRICTED
+        upsert_job_log_row(job_log_ws, job, company, reason)
+
+    return removed
+
+
+def evict_already_restricted_jobs(conn: sqlite3.Connection, main_ws, job_log_ws) -> int:
+    """Sweeps jobs already classified visa_flag="restricted" that are still
+    on Beacon (sheet_row_number IS NOT NULL). Needed because run_visa_scan's
+    own query below only re-evaluates NULL/pending jobs -- a job classified
+    "restricted" while require_visa_sponsorship was False stays on Beacon
+    forever afterward, even once the setting is flipped True, since it's
+    never re-selected for classification again. Call this once at the start
+    of every run_visa_scan call (cheap no-op once the backlog is cleared --
+    a single indexed-by-nothing but small-result-set query). Returns the
+    number of jobs evicted."""
+    stuck = conn.execute(
+        "SELECT * FROM jobs WHERE visa_flag = 'restricted' AND sheet_row_number IS NOT NULL"
+    ).fetchall()
+    evicted = 0
+    for job in stuck:
+        if _evict_restricted_job(conn, main_ws, job_log_ws, job, job["visa_snippet"]):
+            evicted += 1
+    return evicted
+
+
 def run_visa_scan(
     conn: sqlite3.Connection,
     client,
@@ -277,6 +329,15 @@ def run_visa_scan(
     # for "anthropic", a genai.Client for "gemini") -- see app.llm_provider,
     # the one place that builds the right one from Settings.
     classify, model_name = VISA_CLASSIFIERS.get(provider, (haiku_classify, HAIKU_MODEL))
+
+    # Catches jobs classified "restricted" under an earlier
+    # require_visa_sponsorship=False that the query below will never
+    # re-select (see evict_already_restricted_jobs's docstring) -- without
+    # this, flipping the setting True doesn't retroactively evict anything
+    # already classified before the flip.
+    already_evicted = 0
+    if settings.get("require_visa_sponsorship"):
+        already_evicted = evict_already_restricted_jobs(conn, main_ws, job_log_ws)
 
     # Picks up never-scanned jobs AND jobs stuck at VISA_FLAG_PENDING from a
     # prior run whose Haiku call failed -- both get retried the same way.
@@ -364,29 +425,11 @@ def run_visa_scan(
 
         restricted_and_required = settings.get("require_visa_sponsorship") and visa_flag == "restricted"
 
-        if main_ws is not None:
-            if restricted_and_required:
-                if remove_main_row(main_ws, job["id"]):  # Sheets I/O
-                    conn.execute("UPDATE jobs SET sheet_row_number = NULL WHERE id = ?", (job["id"],))
-                    conn.commit()  # before any further Sheets I/O -- see comment above
-            else:
-                update_visa_flag(main_ws, job["id"], visa_flag)  # Sheets I/O
-
         if restricted_and_required:
-            conn.execute(
-                "UPDATE jobs SET status = 'filtered_out', rejection_reason = ? WHERE id = ?",
-                ("Visa Restricted", job["id"]),
-            )
-            conn.commit()  # before the Job Log Sheets call below
+            _evict_restricted_job(conn, main_ws, job_log_ws, job, snippet)
             restricted_filtered += 1
-            if job_log_ws is not None:
-                company = None
-                if job["company_id"] is not None:
-                    company = conn.execute(
-                        "SELECT * FROM companies WHERE id = ?", (job["company_id"],)
-                    ).fetchone()
-                reason = f"{STAGE_VISA_RESTRICTED}: {snippet}" if snippet else STAGE_VISA_RESTRICTED
-                upsert_job_log_row(job_log_ws, job, company, reason)
+        elif main_ws is not None:
+            update_visa_flag(main_ws, job["id"], visa_flag)  # Sheets I/O
 
         if workflow_run_id is not None:
             log_step(
@@ -403,6 +446,7 @@ def run_visa_scan(
     conn.commit()
     return {
         "scanned": len(jobs),
+        "already_restricted_evicted": already_evicted,
         "regex_hits": regex_hits,
         "no_mention": no_mention_count,
         "haiku_calls": haiku_calls,

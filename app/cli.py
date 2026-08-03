@@ -139,7 +139,8 @@ def seed_via_sheet_cmd() -> None:
         conn.close()
     click.echo(
         f"Processed {result['processed']} seed row(s): {result['added']} added, "
-        f"{result['not_found']} not found. Cleaned up {result['cleaned_up']} already-processed row(s)."
+        f"{result['not_found']} not found, {result['skipped_duplicate']} already tracked (skipped). "
+        f"Cleaned up {result['cleaned_up']} already-processed row(s)."
     )
 
 

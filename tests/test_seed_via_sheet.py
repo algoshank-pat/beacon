@@ -114,7 +114,7 @@ def test_probe_boards_falls_through_to_smartrecruiters_when_others_fail(monkeypa
 
 def test_run_seed_via_sheet_returns_empty_without_main_ws(db_conn):
     result = run_seed_via_sheet(db_conn, None)
-    assert result == {"processed": 0, "added": 0, "not_found": 0, "cleaned_up": 0}
+    assert result == {"processed": 0, "added": 0, "not_found": 0, "skipped_duplicate": 0, "cleaned_up": 0}
 
 
 def test_run_seed_via_sheet_onboards_a_new_company(db_conn, monkeypatch):
@@ -126,7 +126,7 @@ def test_run_seed_via_sheet_onboards_a_new_company(db_conn, monkeypatch):
 
     result = run_seed_via_sheet(db_conn, ws)
 
-    assert result == {"processed": 1, "added": 1, "not_found": 0, "cleaned_up": 0}
+    assert result == {"processed": 1, "added": 1, "not_found": 0, "skipped_duplicate": 0, "cleaned_up": 0}
     title = ws.rows[1][MAIN_SHEET_COLUMNS.index("Title")]
     assert title.startswith("Added via Greenhouse")
 
@@ -161,7 +161,7 @@ def test_run_seed_via_sheet_writes_failure_message_when_no_board_found(db_conn, 
 def test_run_seed_via_sheet_skips_blank_company_name(db_conn):
     ws = FakeWorksheet(rows=[MAIN_SHEET_COLUMNS, _seed_row(company="")])
     result = run_seed_via_sheet(db_conn, ws)
-    assert result == {"processed": 0, "added": 0, "not_found": 0, "cleaned_up": 0}
+    assert result == {"processed": 0, "added": 0, "not_found": 0, "skipped_duplicate": 0, "cleaned_up": 0}
 
 
 def test_run_seed_via_sheet_cleans_up_already_processed_row(db_conn):
@@ -169,11 +169,14 @@ def test_run_seed_via_sheet_cleans_up_already_processed_row(db_conn):
 
     result = run_seed_via_sheet(db_conn, ws)
 
-    assert result == {"processed": 0, "added": 0, "not_found": 0, "cleaned_up": 1}
+    assert result == {"processed": 0, "added": 0, "not_found": 0, "skipped_duplicate": 0, "cleaned_up": 1}
     assert len(ws.rows) == 1  # only the header row left
 
 
 def test_run_seed_via_sheet_reuses_existing_company_by_normalized_name(db_conn, monkeypatch):
+    # Exists in the DB, but with no board_url yet (e.g. only ever seen via
+    # Adzuna) -- not a "duplicate" in the skip sense, still gets probed so
+    # it has a real chance at being upgraded to a directly-tracked board.
     db_conn.execute("INSERT INTO companies (name) VALUES ('Acme')")
     db_conn.commit()
 
@@ -183,11 +186,63 @@ def test_run_seed_via_sheet_reuses_existing_company_by_normalized_name(db_conn, 
     )
     ws = FakeWorksheet(rows=[MAIN_SHEET_COLUMNS, _seed_row(company="  acme  ")])
 
-    run_seed_via_sheet(db_conn, ws)
+    result = run_seed_via_sheet(db_conn, ws)
 
+    assert result["added"] == 1
+    assert result["skipped_duplicate"] == 0
     rows = db_conn.execute("SELECT * FROM companies").fetchall()
     assert len(rows) == 1  # no duplicate company row created
     assert rows[0]["source_type"] == "greenhouse"
+
+
+def test_run_seed_via_sheet_skips_duplicate_already_tracked_via_a_real_board(db_conn, monkeypatch):
+    # Already actively tracked (has a board_url) -- must be skipped without
+    # any probing at all, per direct request ("if it's a duplicate --
+    # please ignore the duplicate. No point in adding it back").
+    db_conn.execute(
+        "INSERT INTO companies (name, source_type, board_url, priority_tier) VALUES "
+        "('Acme', 'greenhouse', 'acme', 'A')"
+    )
+    db_conn.commit()
+
+    def _should_not_be_called(slug, **kw):
+        raise AssertionError("probe_boards should never be called for an already-tracked duplicate")
+
+    monkeypatch.setattr("app.seed_via_sheet.fetch_greenhouse_jobs", _should_not_be_called)
+    monkeypatch.setattr("app.seed_via_sheet.fetch_lever_jobs", _should_not_be_called)
+    monkeypatch.setattr("app.seed_via_sheet.fetch_ashby_jobs", _should_not_be_called)
+    monkeypatch.setattr("app.seed_via_sheet.fetch_smartrecruiters_jobs", _should_not_be_called)
+
+    ws = FakeWorksheet(rows=[MAIN_SHEET_COLUMNS, _seed_row(company="  ACME  ")])
+
+    result = run_seed_via_sheet(db_conn, ws)
+
+    assert result["skipped_duplicate"] == 1
+    assert result["added"] == 0
+    assert result["not_found"] == 0
+    title = ws.rows[1][MAIN_SHEET_COLUMNS.index("Title")]
+    assert "Already tracked via Greenhouse" in title
+    assert "skipped" in title.lower()
+    # no second company row created, and the existing one is untouched
+    rows = db_conn.execute("SELECT * FROM companies").fetchall()
+    assert len(rows) == 1
+    assert rows[0]["board_url"] == "acme"
+
+
+def test_run_seed_via_sheet_duplicate_row_gets_cleaned_up_next_run(db_conn):
+    db_conn.execute(
+        "INSERT INTO companies (name, source_type, board_url, priority_tier) VALUES "
+        "('Acme', 'greenhouse', 'acme', 'A')"
+    )
+    db_conn.commit()
+    ws = FakeWorksheet(
+        rows=[MAIN_SHEET_COLUMNS, _seed_row(company="Acme", title="Already tracked via Greenhouse -- skipped (duplicate)")]
+    )
+
+    result = run_seed_via_sheet(db_conn, ws)
+
+    assert result["cleaned_up"] == 1
+    assert len(ws.rows) == 1  # only the header row left
 
 
 def test_run_seed_via_sheet_processes_multiple_rows_bottom_to_top(db_conn, monkeypatch):

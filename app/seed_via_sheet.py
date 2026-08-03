@@ -9,10 +9,21 @@ company's postings start flowing in on the SAME run rather than waiting for
 the next one.
 
 For each such row, not yet processed (Title still blank):
-- Guess a handful of plausible board slugs from the company name (lowercase,
-  strip punctuation and common corporate suffixes, hyphenated/no-hyphen
-  variants) and probe Greenhouse, then Lever, then Ashby, then
-  SmartRecruiters with each one.
+- First, a duplicate check: if a companies row already exists (by
+  normalized-name match) AND already has a board_url set -- i.e. it's
+  already actively tracked via a real ATS board -- skip straight to
+  writing an "already tracked" outcome, no probing at all. Added per
+  direct request ("if it's a duplicate - please ignore the duplicate. No
+  point in adding it back") -- re-probing an already-tracked company would
+  just re-discover the same board via several wasted HTTP calls for a
+  result that changes nothing. A company that exists but has NO board_url
+  yet (e.g. only ever seen via Adzuna) is NOT treated as a duplicate here
+  -- it still gets probed, since this is its first real chance at being
+  upgraded to a directly-tracked board.
+- Otherwise, guess a handful of plausible board slugs from the company
+  name (lowercase, strip punctuation and common corporate suffixes,
+  hyphenated/no-hyphen variants) and probe Greenhouse, then Lever, then
+  Ashby, then SmartRecruiters with each one.
 - A candidate is accepted only if the API call succeeds, returns at least
   one job, AND the guessed slug appears in that job's own URL -- guards
   against a stale/misleading response for a slug that doesn't actually
@@ -118,17 +129,28 @@ def probe_boards(company_name: str) -> dict | None:
     return None
 
 
-def _find_or_create_company(conn: sqlite3.Connection, name: str, source_type: str, board_url: str) -> int:
+def _find_existing_company(conn: sqlite3.Connection, name: str) -> sqlite3.Row | None:
+    """Looks up an existing companies row by normalized-name match (same
+    rule app.companies.get_or_create_company uses), without creating
+    anything. Shared by the duplicate-skip check in run_seed_via_sheet
+    below and _find_or_create_company's own existing-row lookup."""
     normalized = _normalize(name)
-    for row in conn.execute("SELECT id, name FROM companies").fetchall():
+    for row in conn.execute("SELECT * FROM companies").fetchall():
         if _normalize(row["name"]) == normalized:
-            conn.execute(
-                "UPDATE companies SET source_type = ?, board_url = ?, "
-                "priority_tier = COALESCE(priority_tier, 'A') WHERE id = ?",
-                (source_type, board_url, row["id"]),
-            )
-            conn.commit()
-            return row["id"]
+            return row
+    return None
+
+
+def _find_or_create_company(conn: sqlite3.Connection, name: str, source_type: str, board_url: str) -> int:
+    existing = _find_existing_company(conn, name)
+    if existing is not None:
+        conn.execute(
+            "UPDATE companies SET source_type = ?, board_url = ?, "
+            "priority_tier = COALESCE(priority_tier, 'A') WHERE id = ?",
+            (source_type, board_url, existing["id"]),
+        )
+        conn.commit()
+        return existing["id"]
 
     cursor = conn.execute(
         "INSERT INTO companies (name, source_type, board_url, priority_tier) VALUES (?, ?, ?, 'A')",
@@ -160,7 +182,7 @@ def run_seed_via_sheet(conn: sqlite3.Connection, main_ws, workflow_run_id: int |
     already processed on a prior run. No-op (all-zero result) if main_ws
     isn't configured, so this never touches the DB without a Sheet to read
     from."""
-    empty_result = {"processed": 0, "added": 0, "not_found": 0, "cleaned_up": 0}
+    empty_result = {"processed": 0, "added": 0, "not_found": 0, "skipped_duplicate": 0, "cleaned_up": 0}
     if main_ws is None:
         return empty_result
 
@@ -168,7 +190,7 @@ def run_seed_via_sheet(conn: sqlite3.Connection, main_ws, workflow_run_id: int |
     # still to be handled below it in this same pass.
     rows = sorted(_seed_rows(main_ws), key=lambda r: r[0], reverse=True)
 
-    processed = added = not_found = cleaned_up = 0
+    processed = added = not_found = skipped_duplicate = cleaned_up = 0
     for row_number, company_name, existing_title in rows:
         if existing_title:
             # Already processed on a prior run -- the user has had a chance
@@ -178,6 +200,26 @@ def run_seed_via_sheet(conn: sqlite3.Connection, main_ws, workflow_run_id: int |
             continue
 
         if not company_name:
+            continue
+
+        existing = _find_existing_company(conn, company_name)
+        if existing is not None and existing["board_url"]:
+            # Already actively tracked via a real board -- re-probing would
+            # just re-discover the same thing through several wasted HTTP
+            # calls. See module docstring.
+            outcome = f"Already tracked via {existing['source_type'].title()} -- skipped (duplicate)"
+            skipped_duplicate += 1
+            processed += 1
+            col = _col_letter(TITLE_COL_INDEX)
+            call_with_retry(
+                main_ws.update, values=[[outcome]], range_name=f"{col}{row_number}",
+                value_input_option="USER_ENTERED",
+            )
+            if workflow_run_id is not None:
+                log_step(
+                    conn, workflow_run_id=workflow_run_id, step_name="seed_via_sheet",
+                    step_status="skipped_duplicate", detail=f"{company_name}: {outcome}",
+                )
             continue
 
         match = probe_boards(company_name)
@@ -202,4 +244,7 @@ def run_seed_via_sheet(conn: sqlite3.Connection, main_ws, workflow_run_id: int |
                 step_status="ok" if match else "not_found", detail=f"{company_name}: {outcome}",
             )
 
-    return {"processed": processed, "added": added, "not_found": not_found, "cleaned_up": cleaned_up}
+    return {
+        "processed": processed, "added": added, "not_found": not_found,
+        "skipped_duplicate": skipped_duplicate, "cleaned_up": cleaned_up,
+    }
